@@ -1,6 +1,9 @@
 #!/bin/bash
 # install.sh
 
+# Debug mode to see what's happening
+set -x
+
 # Czaractyl Installation Script
 echo "==================================="
 echo "Welcome to Czaractyl Installation"
@@ -15,69 +18,58 @@ echo "==================================="
 
 read -p "Enter your choice (1-5): " choice
 
-# Function to get latest Paper version and build
-get_paper_latest() {
-    local version=$(curl -s https://papermc.io/api/v2/projects/paper | grep -o '"versions":\["[^"]*"' | cut -d'"' -f4)
-    local build=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/$version/builds" | grep -o '"builds":\[[0-9]*' | grep -o '[0-9]*')
-    echo "$version $build"
-}
-
 case $choice in
     1)
         echo "Installing Paper..."
-        read paper_info < <(get_paper_latest)
-        version=${paper_info% *}
-        build=${paper_info#* }
-        echo "Latest version: $version, build: $build"
-        download_url="https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${build}/downloads/paper-${version}-${build}.jar"
-        curl -o server.jar -L "$download_url"
+        # Get latest version
+        PAPER_API="https://papermc.io/api/v2/projects/paper"
+        VERSION=$(curl -s $PAPER_API | grep -o '"versions":\[.*\]' | grep -o '"[^"]*"' | head -1 | tr -d '"')
+        echo "Latest version: $VERSION"
+        
+        # Get latest build
+        BUILD_API="$PAPER_API/versions/$VERSION"
+        BUILD=$(curl -s $BUILD_API | grep -o '"builds":\[.*\]' | grep -o '[0-9]*' | tail -1)
+        echo "Latest build: $BUILD"
+        
+        # Download paper
+        DOWNLOAD_URL="https://papermc.io/api/v2/projects/paper/versions/$VERSION/builds/$BUILD/downloads/paper-$VERSION-$BUILD.jar"
+        echo "Downloading from: $DOWNLOAD_URL"
+        curl -o server.jar -L "$DOWNLOAD_URL"
         ;;
     2)
-        echo "Installing Forge..."
-        read -p "Enter Minecraft version (e.g., 1.19.2): " MC_VERSION
-        FORGE_URL="https://files.minecraftforge.net/maven/net/minecraftforge/forge/${MC_VERSION}-latest/forge-${MC_VERSION}-latest-installer.jar"
-        curl -o forge-installer.jar -L "$FORGE_URL"
-        java -jar forge-installer.jar --installServer
-        rm forge-installer.jar
-        mv forge-*-universal.jar server.jar
-        ;;
-    3)
-        echo "Installing Fabric..."
-        read -p "Enter Minecraft version (e.g., 1.19.2): " MC_VERSION
-        curl -o fabric-installer.jar -L "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.1/fabric-installer-0.11.1.jar"
-        java -jar fabric-installer.jar server -mcversion "$MC_VERSION" -downloadMinecraft
-        rm fabric-installer.jar
-        mv fabric-server-launch.jar server.jar
-        ;;
-    4)
-        echo "Installing Vanilla..."
-        MANIFEST_URL="https://launchermeta.mojang.com/mc/game/version_manifest.json"
-        latest_version=$(curl -s "$MANIFEST_URL" | grep -o '"release": "[^"]*"' | cut -d'"' -f4)
-        version_url=$(curl -s "$MANIFEST_URL" | grep -o "\"${latest_version}\".*{" -A 4 | grep -o 'https://[^"]*')
-        download_url=$(curl -s "$version_url" | grep -o '"server": {[^}]*}' | grep -o 'https://[^"]*')
-        curl -o server.jar -L "$download_url"
-        ;;
-    5)
-        echo "Installing Spigot..."
-        mkdir -p BuildTools && cd BuildTools
-        curl -o BuildTools.jar -L "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
-        java -jar BuildTools.jar --rev latest
-        mv spigot-*.jar ../server.jar
-        cd .. && rm -rf BuildTools
+        echo "Installing Vanilla (fallback for now)..."
+        MANIFEST="https://launchermeta.mojang.com/mc/game/version_manifest.json"
+        LATEST=$(curl -s $MANIFEST | grep -o '"release": "[^"]*"' | cut -d'"' -f4)
+        VERSION_URL=$(curl -s $MANIFEST | grep -o "\"$LATEST\".*{" -A 4 | grep -o 'https://[^"]*')
+        DOWNLOAD_URL=$(curl -s $VERSION_URL | grep -o '"server": {[^}]*}' | grep -o 'https://[^"]*')
+        curl -o server.jar -L "$DOWNLOAD_URL"
         ;;
     *)
-        echo "Invalid choice. Exiting."
-        exit 1
+        echo "Installing Paper (default)..."
+        # Same as option 1
+        PAPER_API="https://papermc.io/api/v2/projects/paper"
+        VERSION=$(curl -s $PAPER_API | grep -o '"versions":\[.*\]' | grep -o '"[^"]*"' | head -1 | tr -d '"')
+        BUILD_API="$PAPER_API/versions/$VERSION"
+        BUILD=$(curl -s $BUILD_API | grep -o '"builds":\[.*\]' | grep -o '[0-9]*' | tail -1)
+        DOWNLOAD_URL="https://papermc.io/api/v2/projects/paper/versions/$VERSION/builds/$BUILD/downloads/paper-$VERSION-$BUILD.jar"
+        curl -o server.jar -L "$DOWNLOAD_URL"
         ;;
 esac
 
-# Verify server.jar was downloaded successfully
+# Verify download
 if [ ! -f "server.jar" ]; then
     echo "Error: Failed to download server.jar"
     exit 1
 fi
 
-# Create server.properties with basic configuration
+# Check file size
+if [ $(stat -f%z "server.jar" 2>/dev/null || stat -c%s "server.jar" 2>/dev/null) -lt 1000 ]; then
+    echo "Error: server.jar is too small, download may have failed"
+    rm server.jar
+    exit 1
+fi
+
+# Create server.properties
 echo "server-port=${SERVER_PORT:-25565}" > server.properties
 echo "motd=A Minecraft Server powered by Czaractyl" >> server.properties
 
