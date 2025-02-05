@@ -5,8 +5,26 @@
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
+
+# Clear screen and show banner
+clear
+echo -e "${CYAN}${BOLD}"
+cat << "EOF"
+   ______                          __        __
+  / ____/___ _____  ____ ______   / /_  ____/ /
+ / /   / __ `/_  / / __ `/ ___/  / __ \/ __  / 
+/ /___/ /_/ / / /_/ /_/ / /     / / / / /_/ /  
+\____/\__,_/ /___/\__,_/_/     /_/ /_/\__,_/   
+                                               
+EOF
+echo -e "${NC}"
+
+echo -e "${CYAN}${BOLD}==========================================================================${NC}"
+echo -e "${YELLOW}${BOLD}                    Czaractyl Server Startup${NC}"
+echo -e "${CYAN}${BOLD}==========================================================================${NC}"
 
 # Check if server.jar exists and is valid
 if [ ! -f "server.jar" ] || [ $(stat -f%z "server.jar" 2>/dev/null || stat -c%s "server.jar" 2>/dev/null) -lt 1000000 ]; then
@@ -59,6 +77,7 @@ else
 fi
 
 # Execute server with appropriate flags
+echo -e "${GREEN}${BOLD}Server is starting... Enjoy!${NC}"
 exec java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M $JAVA_FLAGS \
     -XX:+UseCompressedOops \
     -jar server.jar nogui
