@@ -77,4 +77,26 @@ if [ $SERVER_MEMORY -ge 12000 ]; then
     -XX:+UseNUMA -XX:+UseStringDeduplication"
 elif [ $SERVER_MEMORY -ge 6000 ]; then
     # Medium memory optimization (6-12GB)
-    JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 
+    JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
+    -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch \
+    -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M \
+    -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 \
+    -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 \
+    -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem \
+    -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=true"
+else
+    # Low memory optimization (<6GB)
+    JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
+    -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:G1NewSizePercent=20 \
+    -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=4M \
+    -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90"
+fi
+
+# Execute server with appropriate flags
+animate_text "Server is starting... Enjoy!" "${GREEN}${BOLD}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
+exec java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M $JAVA_FLAGS \
+    -XX:+UseCompressedOops \
+    -jar server.jar nogui
+
+# Note: The exec
