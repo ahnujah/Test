@@ -7,6 +7,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
@@ -14,18 +15,18 @@ BOLD='\033[1m'
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
-   ______                          __        __
-  / ____/___ _____  ____ ______   / /_  ____/ /
- / /   / __ `/_  / / __ `/ ___/  / __ \/ __  / 
-/ /___/ /_/ / / /_/ /_/ / /     / / / / /_/ /  
-\____/\__,_/ /___/\__,_/_/     /_/ /_/\__,_/   
-                                               
+ ██████╗███████╗ █████╗ ██████╗  █████╗  ██████╗████████╗██╗   ██╗██╗     
+██╔════╝╚══███╔╝██╔══██╗██╔══██╗██╔══██╗██╔════╝╚══██╔══╝╚██╗ ██╔╝██║     
+██║       ███╔╝ ███████║██████╔╝███████║██║        ██║    ╚████╔╝ ██║     
+██║      ███╔╝  ██╔══██║██╔══██╗██╔══██║██║        ██║     ╚██╔╝  ██║     
+╚██████╗███████╗██║  ██║██║  ██║██║  ██║╚██████╗   ██║      ██║   ███████╗
+ ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝   ╚═╝      ╚═╝   ╚══════╝
 EOF
 echo -e "${NC}"
 
-echo -e "${CYAN}${BOLD}==========================================================================${NC}"
-echo -e "${YELLOW}${BOLD}                Welcome to Czaractyl Server Installation${NC}"
-echo -e "${CYAN}${BOLD}==========================================================================${NC}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
+echo -e "${YELLOW}${BOLD}                 Welcome to Czaractyl Server Installation${NC}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
 
 # Function to download with progress
 download_with_progress() {
@@ -35,28 +36,32 @@ download_with_progress() {
 
 # Software selection
 echo -e "${GREEN}Please choose your Minecraft server software:${NC}\n"
-echo -e "${BOLD}[1]${NC} Paper         ${CYAN}(Recommended for vanilla + plugins)${NC}"
-echo -e "${BOLD}[2]${NC} Purpur        ${CYAN}(Paper fork with more features)${NC}"
-echo -e "${BOLD}[3]${NC} Forge         ${CYAN}(For modded Minecraft)${NC}"
-echo -e "${BOLD}[4]${NC} Fabric        ${CYAN}(Lightweight mod loader)${NC}"
-echo -e "${BOLD}[5]${NC} Vanilla       ${CYAN}(Official Minecraft server)${NC}"
-echo -e "${CYAN}${BOLD}==========================================================================${NC}"
+echo -e "${BOLD}[1]${NC} ${CYAN}Paper         ${YELLOW}(Recommended for vanilla + plugins)${NC}"
+echo -e "${BOLD}[2]${NC} ${CYAN}Purpur        ${YELLOW}(Paper fork with more features)${NC}"
+echo -e "${BOLD}[3]${NC} ${CYAN}Forge         ${YELLOW}(For modded Minecraft)${NC}"
+echo -e "${BOLD}[4]${NC} ${CYAN}Fabric        ${YELLOW}(Lightweight mod loader)${NC}"
+echo -e "${BOLD}[5]${NC} ${CYAN}Vanilla       ${YELLOW}(Official Minecraft server)${NC}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
 
 read -p "$(echo -e ${YELLOW}"Enter your choice (1-5): "${NC})" choice
 
 # Version selection
 echo -e "\n${GREEN}Please enter the Minecraft version you want to use:${NC}"
-echo -e "${CYAN}(e.g., 1.8, 1.12.2, 1.16.5, 1.19.4, 1.20.4, or 'latest' for the most recent version)${NC}"
+echo -e "${CYAN}(e.g., 1.8.8, 1.12.2, 1.16.5, 1.19.4, 1.20.4, or 'latest' for the most recent version)${NC}"
 read -p "$(echo -e ${YELLOW}"Enter version: "${NC})" MC_VERSION
 
 if [ "$MC_VERSION" == "latest" ]; then
-    MC_VERSION="1.20.4"  # Set to the latest version as of now
+    MC_VERSION=$(curl -s https://launchermeta.mojang.com/mc/game/version_manifest.json | jq -r '.latest.release')
 fi
+
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
+echo -e "${YELLOW}Installing Minecraft version: ${CYAN}$MC_VERSION${NC}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
 
 case $choice in
     1)
         echo -e "${GREEN}Installing Paper...${NC}"
-        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}" | grep -o '"builds":\[.*\]' | grep -o '[0-9]*' | tail -1)
+        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}" | jq -r '.builds[-1]')
         download_with_progress "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}/builds/${PAPER_BUILD}/downloads/paper-${MC_VERSION}-${PAPER_BUILD}.jar" "server.jar"
         ;;
     2)
@@ -85,7 +90,7 @@ case $choice in
         ;;
     *)
         echo -e "${RED}Invalid choice. Installing Paper as default...${NC}"
-        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}" | grep -o '"builds":\[.*\]' | grep -o '[0-9]*' | tail -1)
+        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}" | jq -r '.builds[-1]')
         download_with_progress "https://papermc.io/api/v2/projects/paper/versions/${MC_VERSION}/builds/${PAPER_BUILD}/downloads/paper-${MC_VERSION}-${PAPER_BUILD}.jar" "server.jar"
         ;;
 esac
@@ -106,7 +111,7 @@ fi
 # Create server.properties with enhanced configuration
 cat > server.properties << EOL
 server-port=${SERVER_PORT:-25565}
-motd=\u00A7b\u00A7lMake Your Own Server At Czar.host \u00A78| \u00A7fPowered by Innovation
+motd=\u00A7b\u00A7lCzaractyl \u00A78| \u00A7fPowered by Innovation
 enable-command-block=true
 spawn-protection=0
 view-distance=10
