@@ -1,9 +1,12 @@
 #!/bin/bash
 # start.sh
 
-# Check if server.jar exists
-if [ ! -f "server.jar" ]; then
-    echo "No server.jar found. Running installation script..."
+# Debug mode
+set -x
+
+# Check if server.jar exists and is valid
+if [ ! -f "server.jar" ] || [ $(stat -f%z "server.jar" 2>/dev/null || stat -c%s "server.jar" 2>/dev/null) -lt 1000 ]; then
+    echo "No valid server.jar found. Running installation script..."
     bash install.sh
     if [ ! -f "server.jar" ]; then
         echo "Installation failed! Could not find server.jar"
@@ -12,11 +15,10 @@ if [ ! -f "server.jar" ]; then
 fi
 
 # Set default memory if not specified
-if [ -z "$SERVER_MEMORY" ]; then
-    SERVER_MEMORY=1024
-fi
+SERVER_MEMORY=${SERVER_MEMORY:-1024}
 
-# Start the server with optimized Java flags
+# Start the server
+echo "Starting server with ${SERVER_MEMORY}MB of RAM..."
 java -Xms128M -Xmx${SERVER_MEMORY}M \
     -XX:+UseG1GC \
     -XX:+ParallelRefProcEnabled \
@@ -36,6 +38,5 @@ java -Xms128M -Xmx${SERVER_MEMORY}M \
     -XX:SurvivorRatio=32 \
     -XX:+PerfDisableSharedMem \
     -XX:MaxTenuringThreshold=1 \
-    -Dusing.aikars.flags=https://mcflags.emc.gs \
-    -Daikars.new.flags=true \
+    -Dusing.aikars.flags=true \
     -jar server.jar nogui
