@@ -14,11 +14,7 @@ BOLD='\033[1m'
 animate_text() {
     text="$1"
     color="$2"
-    for (( i=0; i<${#text}; i++ )); do
-        echo -ne "${color}${text:$i:1}${NC}"
-        sleep 0.01
-    done
-    echo
+    echo -e "${color}${text}${NC}"
 }
 
 # Clear screen and show banner
@@ -33,6 +29,7 @@ cat << "EOF"
  ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝   ╚═╝      ╚═╝   ╚══════╝
 EOF
 echo -e "${NC}"
+echo -e "${YELLOW}${BOLD}Developed & Maintained By @arpit_singh_boy${NC}"
 
 animate_text "Welcome to Czaractyl Server Installation" "${YELLOW}${BOLD}"
 echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
@@ -58,27 +55,25 @@ read -p "$(echo -e ${YELLOW}"Enter your choice (1-6): "${NC})" choice
 case $choice in
     1)
         animate_text "Installing latest Paper..." "${GREEN}"
-        PAPER_VERSION=$(curl -s https://papermc.io/api/v2/projects/paper | grep -oP '"versions":\[".*?"\]' | grep -oP '".*?"' | tail -n1 | tr -d '"')
-        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds" | grep -oP '"build":\d+' | tail -n1 | cut -d':' -f2)
-        URL="https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds/${PAPER_BUILD}/downloads/paper-${PAPER_VERSION}-${PAPER_BUILD}.jar"
+        URL="https://api.papermc.io/v2/projects/paper/versions/1.21.4/builds/138/downloads/paper-1.21.4-138.jar"
         JAR_NAME="server.jar"
         ;;
     2)
         animate_text "Installing latest Forge..." "${GREEN}"
-        FORGE_VERSION=$(curl -s https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json | grep -oP '"latest-1.20.4":"\K[^"]*')
+        FORGE_VERSION="49.0.14"
         URL="https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.4-${FORGE_VERSION}/forge-1.20.4-${FORGE_VERSION}-installer.jar"
         JAR_NAME="forge-installer.jar"
         ;;
     3)
         animate_text "Installing latest Fabric..." "${GREEN}"
-        FABRIC_VERSION=$(curl -s https://meta.fabricmc.net/v2/versions/installer | grep -oP '"version":"\K[^"]*' | head -1)
+        FABRIC_VERSION="0.15.7"
         URL="https://maven.fabricmc.net/net/fabricmc/fabric-installer/${FABRIC_VERSION}/fabric-installer-${FABRIC_VERSION}.jar"
         JAR_NAME="fabric-installer.jar"
         ;;
     4)
         animate_text "Installing latest Sponge..." "${GREEN}"
-        SPONGE_VERSION=$(curl -s https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/maven-metadata.xml | grep -oP '(?<=<release>).*?(?=</release>)')
-        URL="https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/${SPONGE_VERSION}/spongevanilla-${SPONGE_VERSION}.jar"
+        SPONGE_VERSION="1.20.1-10.0.0"
+        URL="https://repo.spongepowered.org/repository/maven-releases/org/spongepowered/spongevanilla/${SPONGE_VERSION}/spongevanilla-${SPONGE_VERSION}.jar"
         JAR_NAME="server.jar"
         ;;
     5)
@@ -88,7 +83,7 @@ case $choice in
         ;;
     6)
         animate_text "Installing latest Bedrock..." "${GREEN}"
-        BEDROCK_VERSION=$(curl -s https://www.minecraft.net/en-us/download/server/bedrock | grep -oP 'https://minecraft.azureedge.net/bin-linux/[^"]*' | grep -oP 'bedrock-server-\K[0-9.]*')
+        BEDROCK_VERSION="1.20.71.01"
         URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-${BEDROCK_VERSION}.zip"
         JAR_NAME="bedrock-server.zip"
         ;;
