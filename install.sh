@@ -12,6 +12,7 @@ BOLD='\033[1m'
 
 # Clear screen and show banner
 clear
+echo -e "${CYAN}${BOLD}"
 cat << "EOF"
  ██████╗███████╗ █████╗ ██████╗  █████╗  ██████╗████████╗██╗   ██╗██╗     
 ██╔════╝╚══███╔╝██╔══██╗██╔══██╗██╔══██╗██╔════╝╚══██╔══╝╚██╗ ██╔╝██║     
@@ -20,6 +21,7 @@ cat << "EOF"
 ╚██████╗███████╗██║  ██║██║  ██║██║  ██║╚██████╗   ██║      ██║   ███████╗
  ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝   ╚═╝      ╚═╝   ╚══════╝
 EOF
+echo -e "${NC}"
 
 echo -e "${CYAN}${BOLD}==========================================================================${NC}"
 echo -e "${YELLOW}${BOLD}                    Welcome to Czaractyl Installation${NC}"
@@ -30,28 +32,9 @@ echo -e "${BOLD}[2]${NC} Purpur        ${CYAN}(Paper fork with more features)${N
 echo -e "${BOLD}[3]${NC} Forge         ${CYAN}(For modded Minecraft)${NC}"
 echo -e "${BOLD}[4]${NC} Fabric        ${CYAN}(Lightweight mod loader)${NC}"
 echo -e "${BOLD}[5]${NC} Vanilla       ${CYAN}(Official Minecraft server)${NC}"
-echo -e "${BOLD}[6]${NC} Spigot        ${CYAN}(CraftBukkit fork)${NC}"
-echo -e "${BOLD}[7]${NC} Waterfall     ${CYAN}(BungeeCord fork - Proxy)${NC}"
-echo -e "${BOLD}[8]${NC} Velocity      ${CYAN}(Modern Minecraft proxy)${NC}"
-echo -e "${BOLD}[9]${NC} Mohist        ${CYAN}(Forge + Spigot hybrid)${NC}"
 echo -e "${CYAN}${BOLD}==========================================================================${NC}"
 
-read -p "$(echo -e ${YELLOW}"Enter your choice (1-9): "${NC})" choice
-
-# Function to show spinner
-spinner() {
-    local pid=$1
-    local delay=0.1
-    local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
-        local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b\b\b\b"
-    done
-    printf "    \b\b\b\b"
-}
+read -p "$(echo -e ${YELLOW}"Enter your choice (1-5): "${NC})" choice
 
 # Function to download with progress
 download_with_progress() {
@@ -87,27 +70,24 @@ case $choice in
         echo -e "${GREEN}Installing Vanilla...${NC}"
         download_with_progress "https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar" "server.jar"
         ;;
-    6)
-        echo -e "${GREEN}Installing Spigot...${NC}"
-        download_with_progress "https://download.getbukkit.org/spigot/spigot-1.20.4.jar" "server.jar"
-        ;;
-    7)
-        echo -e "${GREEN}Installing Waterfall...${NC}"
-        download_with_progress "https://api.papermc.io/v2/projects/waterfall/versions/1.20/builds/543/downloads/waterfall-1.20-543.jar" "server.jar"
-        ;;
-    8)
-        echo -e "${GREEN}Installing Velocity...${NC}"
-        download_with_progress "https://api.papermc.io/v2/projects/velocity/versions/3.3.0-SNAPSHOT/builds/297/downloads/velocity-3.3.0-SNAPSHOT-297.jar" "server.jar"
-        ;;
-    9)
-        echo -e "${GREEN}Installing Mohist...${NC}"
-        download_with_progress "https://mohistmc.com/api/v2/projects/mohist/1.20.4/latest/download" "server.jar"
-        ;;
     *)
         echo -e "${RED}Invalid choice. Installing Paper as default...${NC}"
         download_with_progress "https://api.papermc.io/v2/projects/paper/versions/1.20.4/builds/441/downloads/paper-1.20.4-441.jar" "server.jar"
         ;;
 esac
+
+# Verify download
+if [ ! -f "server.jar" ]; then
+    echo -e "${RED}Error: Failed to download server.jar${NC}"
+    exit 1
+fi
+
+# Check file size (minimum 1MB)
+if [ $(stat -f%z "server.jar" 2>/dev/null || stat -c%s "server.jar" 2>/dev/null) -lt 1000000 ]; then
+    echo -e "${RED}Error: server.jar is too small, download may have failed${NC}"
+    rm server.jar
+    exit 1
+fi
 
 # Create server.properties with enhanced configuration
 cat > server.properties << EOL
@@ -128,9 +108,4 @@ EOL
 # Accept EULA
 echo "eula=true" > eula.txt
 
-# Create server icon if it doesn't exist
-if [ ! -f "server-icon.png" ]; then
-    curl -o server-icon.png "https://raw.githubusercontent.com/ahnujah/Test/main/server-icon.png"
-fi
-
-echo -e "${GREEN}${BOLD}Installation complete! Starting server...${NC}"
+echo -e "${GREEN}${BOLD}Installation complete! Server is ready to start.${NC}"
