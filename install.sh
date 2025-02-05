@@ -4,7 +4,6 @@
 # ANSI color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
@@ -44,11 +43,6 @@ download_with_progress() {
     curl -#L "$1" -o "$2"
 }
 
-# Function to fetch PaperMC versions
-fetch_paper_versions() {
-    curl -s "https://gist.githubusercontent.com/osipxd/6119732e30059241c2192c4a8d2218d9/raw/b3b0d5871333f087eb97df84eaa54c93e3fe9aad/paper-versions.json" | jq -r '.versions | keys[]'
-}
-
 # Software selection
 echo -e "${GREEN}Please choose your Minecraft server software:${NC}\n"
 echo -e "${BOLD}[1]${NC} ${CYAN}Paper         ${YELLOW}(Recommended for vanilla + plugins)${NC}"
@@ -61,61 +55,41 @@ echo -e "${MAGENTA}${BOLD}======================================================
 
 read -p "$(echo -e ${YELLOW}"Enter your choice (1-6): "${NC})" choice
 
-# Version selection
-if [ "$choice" -eq 1 ]; then
-    echo -e "\n${GREEN}Available Paper versions:${NC}"
-    VERSIONS=($(fetch_paper_versions))
-    for i in "${!VERSIONS[@]}"; do 
-        echo -e "${CYAN}[$((i+1))] ${VERSIONS[$i]}${NC}"
-    done
-    echo -e "${CYAN}[0] Custom version${NC}"
-
-    read -p "$(echo -e ${YELLOW}"Enter your choice (0-${#VERSIONS[@]}): "${NC})" version_choice
-
-    if [ "$version_choice" -eq 0 ]; then
-        read -p "$(echo -e ${YELLOW}"Enter custom version: "${NC})" SERVER_VERSION
-    else
-        SERVER_VERSION="${VERSIONS[$((version_choice-1))]}"
-    fi
-else
-    read -p "$(echo -e ${YELLOW}"Enter Minecraft version (e.g., 1.20.4): "${NC})" SERVER_VERSION
-fi
-
-echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
-animate_text "Installing Minecraft version: $SERVER_VERSION" "${CYAN}"
-echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
-
 case $choice in
     1)
-        animate_text "Installing Paper..." "${GREEN}"
-        PAPER_JSON=$(curl -s "https://gist.githubusercontent.com/osipxd/6119732e30059241c2192c4a8d2218d9/raw/b3b0d5871333f087eb97df84eaa54c93e3fe9aad/paper-versions.json")
-        URL=$(echo $PAPER_JSON | jq -r ".versions[\"$SERVER_VERSION\"]")
+        animate_text "Installing latest Paper..." "${GREEN}"
+        PAPER_VERSION=$(curl -s https://papermc.io/api/v2/projects/paper | jq -r '.versions[-1]')
+        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds" | jq -r '.builds[-1].build')
+        URL="https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds/${PAPER_BUILD}/downloads/paper-${PAPER_VERSION}-${PAPER_BUILD}.jar"
         JAR_NAME="paper.jar"
         ;;
     2)
-        animate_text "Installing Forge..." "${GREEN}"
-        BUILD_NUMBER=$(curl -s "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json" | jq -r --arg MC_VERSION "$SERVER_VERSION" '.promos | to_entries[] | select(.key | startswith($MC_VERSION)) | .value' | head -n 1)
-        URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${SERVER_VERSION}-${BUILD_NUMBER}/forge-${SERVER_VERSION}-${BUILD_NUMBER}-installer.jar"
+        animate_text "Installing latest Forge..." "${GREEN}"
+        FORGE_VERSION=$(curl -s https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json | jq -r '.promos["latest-1.20.4"]')
+        URL="https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.4-${FORGE_VERSION}/forge-1.20.4-${FORGE_VERSION}-installer.jar"
         JAR_NAME="forge-installer.jar"
         ;;
     3)
-        animate_text "Installing Fabric..." "${GREEN}"
-        URL="https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar"
+        animate_text "Installing latest Fabric..." "${GREEN}"
+        FABRIC_VERSION=$(curl -s https://meta.fabricmc.net/v2/versions/installer | jq -r '.[0].version')
+        URL="https://maven.fabricmc.net/net/fabricmc/fabric-installer/${FABRIC_VERSION}/fabric-installer-${FABRIC_VERSION}.jar"
         JAR_NAME="fabric-installer.jar"
         ;;
     4)
-        animate_text "Installing Sponge..." "${GREEN}"
-        URL="https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/${SERVER_VERSION}/spongevanilla-${SERVER_VERSION}.jar"
+        animate_text "Installing latest Sponge..." "${GREEN}"
+        SPONGE_VERSION=$(curl -s https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/maven-metadata.xml | grep -oP '(?<=<release>).*?(?=</release>)')
+        URL="https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/${SPONGE_VERSION}/spongevanilla-${SPONGE_VERSION}.jar"
         JAR_NAME="sponge.jar"
         ;;
     5)
-        animate_text "Installing BungeeCord..." "${GREEN}"
+        animate_text "Installing latest BungeeCord..." "${GREEN}"
         URL="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
         JAR_NAME="bungeecord.jar"
         ;;
     6)
-        animate_text "Installing Bedrock..." "${GREEN}"
-        URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-${SERVER_VERSION}.zip"
+        animate_text "Installing latest Bedrock..." "${GREEN}"
+        BEDROCK_VERSION=$(curl -s https://www.minecraft.net/en-us/download/server/bedrock | grep -oP '(?<=bedrock-server-).*?(?=.zip)')
+        URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-${BEDROCK_VERSION}.zip"
         JAR_NAME="bedrock-server.zip"
         ;;
     *)
@@ -147,7 +121,7 @@ case $choice in
         JAR_NAME=$(ls forge-*-universal.jar)
         ;;
     3) # Fabric
-        java -jar fabric-installer.jar server -mcversion $SERVER_VERSION -downloadMinecraft
+        java -jar fabric-installer.jar server -downloadMinecraft
         rm fabric-installer.jar
         JAR_NAME="fabric-server-launch.jar"
         ;;
@@ -188,12 +162,9 @@ echo "eula=true" > eula.txt
 # Download server icon
 curl -o server-icon.png "https://i.postimg.cc/rwZPYnGV/IMG-20250203-221310-1.png"
 
-# Create plugins folder and download essential plugins (for Bukkit-based servers)
-if [ "$choice" -eq 1 ] || [ "$choice" -eq 4 ]; then
-    mkdir -p plugins
-    echo -e "${CYAN}Downloading essential plugins...${NC}"
-    curl -L -o plugins/EssentialsX.jar "https://github.com/EssentialsX/Essentials/releases/download/2.19.7/EssentialsX-2.19.7.jar"
-    curl -L -o plugins/LuckPerms.jar "https://ci.lucko.me/job/LuckPerms/1515/artifact/bukkit/loader/build/libs/LuckPerms-Bukkit-5.4.40.jar"
-fi
+# Create plugins folder and download Chunky plugin
+mkdir -p plugins
+echo -e "${CYAN}Downloading Chunky plugin...${NC}"
+curl -L -o plugins/Chunky-Bukkit-1.4.28.jar "https://cdn.modrinth.com/data/fALzjamp/versions/ytBhnGfO/Chunky-Bukkit-1.4.28.jar"
 
 animate_text "Installation complete! Server is ready to start." "${GREEN}${BOLD}"
