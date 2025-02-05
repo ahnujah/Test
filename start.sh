@@ -18,8 +18,11 @@ if [ ! -f "server.jar" ] || [ $(stat -f%z "server.jar" 2>/dev/null || stat -c%s 
     fi
 fi
 
-# Set default memory if not specified
-SERVER_MEMORY=${SERVER_MEMORY:-1024}
+# Set default memory if not specified or if it's 0
+if [ -z "$SERVER_MEMORY" ] || [ "$SERVER_MEMORY" -eq 0 ]; then
+    SERVER_MEMORY=1024
+    echo -e "${YELLOW}${BOLD}SERVER_MEMORY was not set or was 0. Using default value of 1024MB.${NC}"
+fi
 
 # Create automatic backup directory
 mkdir -p backups
