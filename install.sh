@@ -134,7 +134,7 @@ esac
 if [ "$choice" -ne 5 ] && [ "$choice" -ne 6 ]; then
     cat > server.properties << EOL
 server-port=${SERVER_PORT:-25565}
-motd=\u00A7b\u00A7lCzar-Server \u00A78| \u00A7fMake Yours At czar.host
+motd=\u00A7b\u00A7lCzar-Server \u00A78| \u00A7fMake Yours At dash.czar.host
 enable-command-block=true
 spawn-protection=0
 view-distance=10
