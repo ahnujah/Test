@@ -58,10 +58,10 @@ read -p "$(echo -e ${YELLOW}"Enter your choice (1-6): "${NC})" choice
 case $choice in
     1)
         animate_text "Installing latest Paper..." "${GREEN}"
-        PAPER_VERSION=$(curl -s https://papermc.io/api/v2/projects/paper | grep -oP '(?<="versions":\[)[^]]*' | grep -oP '[^,"]*' | tail -1)
-        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds" | grep -oP '(?<="build":)\d+' | tail -1)
+        PAPER_VERSION=$(curl -s https://papermc.io/api/v2/projects/paper | grep -oP '"versions":\[".*?"\]' | grep -oP '".*?"' | tail -n1 | tr -d '"')
+        PAPER_BUILD=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds" | grep -oP '"build":\d+' | tail -n1 | cut -d':' -f2)
         URL="https://papermc.io/api/v2/projects/paper/versions/${PAPER_VERSION}/builds/${PAPER_BUILD}/downloads/paper-${PAPER_VERSION}-${PAPER_BUILD}.jar"
-        JAR_NAME="paper.jar"
+        JAR_NAME="server.jar"
         ;;
     2)
         animate_text "Installing latest Forge..." "${GREEN}"
@@ -79,12 +79,12 @@ case $choice in
         animate_text "Installing latest Sponge..." "${GREEN}"
         SPONGE_VERSION=$(curl -s https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/maven-metadata.xml | grep -oP '(?<=<release>).*?(?=</release>)')
         URL="https://repo.spongepowered.org/maven/org/spongepowered/spongevanilla/${SPONGE_VERSION}/spongevanilla-${SPONGE_VERSION}.jar"
-        JAR_NAME="sponge.jar"
+        JAR_NAME="server.jar"
         ;;
     5)
         animate_text "Installing latest BungeeCord..." "${GREEN}"
         URL="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
-        JAR_NAME="bungeecord.jar"
+        JAR_NAME="server.jar"
         ;;
     6)
         animate_text "Installing latest Bedrock..." "${GREEN}"
@@ -119,11 +119,13 @@ case $choice in
         java -jar forge-installer.jar --installServer
         rm forge-installer.jar
         JAR_NAME=$(ls forge-*-universal.jar)
+        mv "$JAR_NAME" server.jar
         ;;
     3) # Fabric
         java -jar fabric-installer.jar server -downloadMinecraft
         rm fabric-installer.jar
         JAR_NAME="fabric-server-launch.jar"
+        mv "$JAR_NAME" server.jar
         ;;
     6) # Bedrock
         unzip -o bedrock-server.zip
@@ -132,11 +134,6 @@ case $choice in
         JAR_NAME="bedrock_server"
         ;;
 esac
-
-# Rename the final jar to server.jar (except for Bedrock)
-if [ "$choice" -ne 6 ]; then
-    mv "$JAR_NAME" server.jar
-fi
 
 # Create server.properties with enhanced configuration
 if [ "$choice" -ne 5 ] && [ "$choice" -ne 6 ]; then
