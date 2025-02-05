@@ -1,8 +1,7 @@
 #!/bin/bash
+# install.sh
 
 # Czaractyl Installation Script
-# https://github.com/ahnujah/Test
-
 echo "==================================="
 echo "Welcome to Czaractyl Installation"
 echo "==================================="
@@ -16,24 +15,28 @@ echo "==================================="
 
 read -p "Enter your choice (1-5): " choice
 
-# Install required tools
-apk add --no-cache curl jq
+# Function to get latest Paper version and build
+get_paper_latest() {
+    local version=$(curl -s https://papermc.io/api/v2/projects/paper | grep -o '"versions":\["[^"]*"' | cut -d'"' -f4)
+    local build=$(curl -s "https://papermc.io/api/v2/projects/paper/versions/$version/builds" | grep -o '"builds":\[[0-9]*' | grep -o '[0-9]*')
+    echo "$version $build"
+}
 
 case $choice in
     1)
         echo "Installing Paper..."
-        LATEST_VERSION=$(curl -s https://papermc.io/api/v2/projects/paper | jq -r '.versions[-1]')
-        BUILD_NUMBER=$(curl -s https://papermc.io/api/v2/projects/paper/versions/${LATEST_VERSION} | jq -r '.builds[-1]')
-        JAR_NAME="paper-${LATEST_VERSION}-${BUILD_NUMBER}.jar"
-        DOWNLOAD_URL="https://papermc.io/api/v2/projects/paper/versions/${LATEST_VERSION}/builds/${BUILD_NUMBER}/downloads/${JAR_NAME}"
-        curl -o server.jar $DOWNLOAD_URL
+        read paper_info < <(get_paper_latest)
+        version=${paper_info% *}
+        build=${paper_info#* }
+        echo "Latest version: $version, build: $build"
+        download_url="https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${build}/downloads/paper-${version}-${build}.jar"
+        curl -o server.jar -L "$download_url"
         ;;
     2)
         echo "Installing Forge..."
         read -p "Enter Minecraft version (e.g., 1.19.2): " MC_VERSION
-        FORGE_VERSION=$(curl -s https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json | jq -r --arg MC_VERSION "$MC_VERSION" '.promos | to_entries[] | select(.key | startswith($MC_VERSION)) | .value' | head -n 1)
-        DOWNLOAD_URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar"
-        curl -o forge-installer.jar $DOWNLOAD_URL
+        FORGE_URL="https://files.minecraftforge.net/maven/net/minecraftforge/forge/${MC_VERSION}-latest/forge-${MC_VERSION}-latest-installer.jar"
+        curl -o forge-installer.jar -L "$FORGE_URL"
         java -jar forge-installer.jar --installServer
         rm forge-installer.jar
         mv forge-*-universal.jar server.jar
@@ -41,24 +44,23 @@ case $choice in
     3)
         echo "Installing Fabric..."
         read -p "Enter Minecraft version (e.g., 1.19.2): " MC_VERSION
-        FABRIC_VERSION=$(curl -s https://meta.fabricmc.net/v2/versions/installer | jq -r '.[0].version')
-        curl -o fabric-installer.jar https://maven.fabricmc.net/net/fabricmc/fabric-installer/${FABRIC_VERSION}/fabric-installer-${FABRIC_VERSION}.jar
-        java -jar fabric-installer.jar server -mcversion $MC_VERSION -downloadMinecraft
+        curl -o fabric-installer.jar -L "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.1/fabric-installer-0.11.1.jar"
+        java -jar fabric-installer.jar server -mcversion "$MC_VERSION" -downloadMinecraft
         rm fabric-installer.jar
         mv fabric-server-launch.jar server.jar
         ;;
     4)
-        echo "Installing Vanilla Minecraft..."
+        echo "Installing Vanilla..."
         MANIFEST_URL="https://launchermeta.mojang.com/mc/game/version_manifest.json"
-        LATEST_VERSION=$(curl -s $MANIFEST_URL | jq -r '.latest.release')
-        VERSION_URL=$(curl -s $MANIFEST_URL | jq -r --arg VERSION "$LATEST_VERSION" '.versions[] | select(.id == $VERSION) | .url')
-        DOWNLOAD_URL=$(curl -s $VERSION_URL | jq -r '.downloads.server.url')
-        curl -o server.jar $DOWNLOAD_URL
+        latest_version=$(curl -s "$MANIFEST_URL" | grep -o '"release": "[^"]*"' | cut -d'"' -f4)
+        version_url=$(curl -s "$MANIFEST_URL" | grep -o "\"${latest_version}\".*{" -A 4 | grep -o 'https://[^"]*')
+        download_url=$(curl -s "$version_url" | grep -o '"server": {[^}]*}' | grep -o 'https://[^"]*')
+        curl -o server.jar -L "$download_url"
         ;;
     5)
         echo "Installing Spigot..."
         mkdir -p BuildTools && cd BuildTools
-        curl -o BuildTools.jar https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
+        curl -o BuildTools.jar -L "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
         java -jar BuildTools.jar --rev latest
         mv spigot-*.jar ../server.jar
         cd .. && rm -rf BuildTools
@@ -69,8 +71,14 @@ case $choice in
         ;;
 esac
 
+# Verify server.jar was downloaded successfully
+if [ ! -f "server.jar" ]; then
+    echo "Error: Failed to download server.jar"
+    exit 1
+fi
+
 # Create server.properties with basic configuration
-echo "server-port=${SERVER_PORT}" > server.properties
+echo "server-port=${SERVER_PORT:-25565}" > server.properties
 echo "motd=A Minecraft Server powered by Czaractyl" >> server.properties
 
 # Accept EULA
