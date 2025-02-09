@@ -7,6 +7,8 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
+BLUE='\033[0;34m'
+WHITE='\033[1;37m'
 NC='\033[0m'
 BOLD='\033[1m'
 
@@ -14,7 +16,11 @@ BOLD='\033[1m'
 animate_text() {
     text="$1"
     color="$2"
-    echo -e "${color}${text}${NC}"
+    for (( i=0; i<${#text}; i++ )); do
+        echo -ne "${color}${text:$i:1}${NC}"
+        sleep 0.01
+    done
+    echo
 }
 
 # Clear screen and show banner
@@ -29,10 +35,20 @@ cat << "EOF"
  ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝   ╚═╝      ╚═╝   ╚══════╝
 EOF
 echo -e "${NC}"
-echo -e "${YELLOW}${BOLD}Developed & Maintained By @arpit_singh_boy${NC}"
 
-animate_text "Czaractyl Server Startup" "${YELLOW}${BOLD}"
+# Animated subtitle
+animate_text "Welcome to the Next Generation of Minecraft Server Management" "${YELLOW}${BOLD}"
+
+# Colorful separator
 echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
+
+# Developer credit with animation
+animate_text "Developed & Maintained By @arpit_singh_boy" "${CYAN}${BOLD}"
+
+# Another colorful separator
+echo -e "${BLUE}${BOLD}==========================================================================${NC}"
+
+animate_text "Czaractyl Server Startup Sequence Initiated" "${GREEN}${BOLD}"
 
 # Detect server type
 if [ -f "bedrock_server" ]; then
@@ -82,10 +98,10 @@ start_server() {
 
     if [ "$SERVER_TYPE" = "bedrock" ]; then
         animate_text "Starting Bedrock server..." "${GREEN}${BOLD}"
-        LD_LIBRARY_PATH=. ./bedrock_server | tee /dev/tty | sed -u 's/.*/./' &
+        LD_LIBRARY_PATH=. ./bedrock_server | tee >(sed 's/.*/./' > /dev/null) &
     elif [ "$SERVER_TYPE" = "bungeecord" ]; then
         animate_text "Starting BungeeCord server..." "${GREEN}${BOLD}"
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar | tee /dev/tty | sed -u 's/.*/./' &
+        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar | tee >(sed 's/.*/./' > /dev/null) &
     else
         # Different optimization flags based on server memory
         if [ $SERVER_MEMORY -ge 12000 ]; then
@@ -120,7 +136,7 @@ start_server() {
         echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
         java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M $JAVA_FLAGS \
             -XX:+UseCompressedOops \
-            -jar server.jar nogui | tee /dev/tty | sed -u 's/.*/./' &
+            -jar server.jar nogui | tee >(sed 's/.*/./' > /dev/null) &
     fi
 
     SERVER_PID=$!
@@ -134,18 +150,18 @@ stop_server() {
     else
         screen -S minecraft -X stuff "stop$(printf '\r')"
     fi
-    wait $SERVER_PID
+    wait $SERVER_PID 2>/dev/null
     animate_text "Server stopped." "${RED}${BOLD}"
 }
 
 # Function to check for player connections
 check_player_connection() {
     if [ "$SERVER_TYPE" = "bedrock" ]; then
-        if grep -q "Player connected" <(tail -n 50 logs/latest.log); then
+        if grep -q "Player connected" <(tail -n 50 logs/latest.log 2>/dev/null); then
             return 0
         fi
     else
-        if grep -q "logged in with entity id" <(tail -n 50 logs/latest.log); then
+        if grep -q "logged in with entity id" <(tail -n 50 logs/latest.log 2>/dev/null); then
             return 0
         fi
     fi
@@ -161,21 +177,21 @@ handle_user_input() {
             exit 0
             ;;
         start)
-            if ! ps -p $SERVER_PID > /dev/null; then
+            if ! ps -p $SERVER_PID > /dev/null 2>&1; then
                 start_server
             else
                 animate_text "Server is already running." "${YELLOW}${BOLD}"
             fi
             ;;
         stop)
-            if ps -p $SERVER_PID > /dev/null; then
+            if ps -p $SERVER_PID > /dev/null 2>&1; then
                 stop_server
             else
                 animate_text "Server is not running." "${YELLOW}${BOLD}"
             fi
             ;;
         restart)
-            if ps -p $SERVER_PID > /dev/null; then
+            if ps -p $SERVER_PID > /dev/null 2>&1; then
                 stop_server
             fi
             start_server
@@ -187,7 +203,7 @@ handle_user_input() {
             animate_text "Backup created: $backup_name" "${GREEN}${BOLD}"
             ;;
         *)
-            if ps -p $SERVER_PID > /dev/null; then
+            if ps -p $SERVER_PID > /dev/null 2>&1; then
                 screen -S minecraft -X stuff "$user_input$(printf '\r')"
             else
                 animate_text "Server is not running. Start it first." "${YELLOW}${BOLD}"
@@ -207,19 +223,19 @@ while true; do
     fi
 
     # Check if server is running
-    if ! ps -p $SERVER_PID > /dev/null; then
+    if ! ps -p $SERVER_PID > /dev/null 2>&1; then
         animate_text "Server has stopped unexpectedly. Restarting..." "${RED}${BOLD}"
         start_server
     fi
 
     # Check for player activity every 5 minutes
     if ! check_player_connection; then
-        animate_text "No player activity detected. Server will shut down in 5 minutes if no players join." "${YELLOW}${BOLD}"
+        animate_text "No player activity detected. Server will hibernate in 5 minutes if no players join." "${YELLOW}${BOLD}"
         sleep 300
 
         if ! check_player_connection; then
             stop_server
-            animate_text "Server is now in standby mode. It will start automatically when a player tries to join." "${CYAN}${BOLD}"
+            animate_text "Server is now in hibernation mode. It will start automatically when a player tries to join." "${CYAN}${BOLD}"
             
             # Wait for a player to try to connect
             while true; do
@@ -230,9 +246,12 @@ while true; do
                 fi
                 sleep 10
 
-                # Check for user input during standby
+                # Check for user input during hibernation
                 if read -t 0.1 -N 1 input; then
                     handle_user_input
+                    if ps -p $SERVER_PID > /dev/null 2>&1; then
+                        break
+                    fi
                 fi
             done
         fi
