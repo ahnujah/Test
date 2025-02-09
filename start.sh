@@ -82,10 +82,10 @@ start_server() {
 
     if [ "$SERVER_TYPE" = "bedrock" ]; then
         animate_text "Starting Bedrock server..." "${GREEN}${BOLD}"
-        LD_LIBRARY_PATH=. ./bedrock_server &
+        LD_LIBRARY_PATH=. ./bedrock_server | tee /dev/tty | sed -u 's/.*/./' &
     elif [ "$SERVER_TYPE" = "bungeecord" ]; then
         animate_text "Starting BungeeCord server..." "${GREEN}${BOLD}"
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar &
+        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar | tee /dev/tty | sed -u 's/.*/./' &
     else
         # Different optimization flags based on server memory
         if [ $SERVER_MEMORY -ge 12000 ]; then
@@ -120,7 +120,7 @@ start_server() {
         echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
         java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M $JAVA_FLAGS \
             -XX:+UseCompressedOops \
-            -jar server.jar nogui &
+            -jar server.jar nogui | tee /dev/tty | sed -u 's/.*/./' &
     fi
 
     SERVER_PID=$!
@@ -132,7 +132,7 @@ stop_server() {
     if [ "$SERVER_TYPE" = "bedrock" ]; then
         kill $SERVER_PID
     else
-        kill -SIGINT $SERVER_PID
+        screen -S minecraft -X stuff "stop$(printf '\r')"
     fi
     wait $SERVER_PID
     animate_text "Server stopped." "${RED}${BOLD}"
@@ -140,10 +140,60 @@ stop_server() {
 
 # Function to check for player connections
 check_player_connection() {
-    # This is a placeholder. You need to implement the actual check based on your server setup.
-    # For example, you might check server logs or use a plugin to detect player connections.
-    # Return 0 if a player is trying to connect, 1 otherwise.
+    if [ "$SERVER_TYPE" = "bedrock" ]; then
+        if grep -q "Player connected" <(tail -n 50 logs/latest.log); then
+            return 0
+        fi
+    else
+        if grep -q "logged in with entity id" <(tail -n 50 logs/latest.log); then
+            return 0
+        fi
+    fi
     return 1
+}
+
+# Function to handle user input
+handle_user_input() {
+    read -p "Enter a command (or 'exit' to quit): " user_input
+    case $user_input in
+        exit)
+            stop_server
+            exit 0
+            ;;
+        start)
+            if ! ps -p $SERVER_PID > /dev/null; then
+                start_server
+            else
+                animate_text "Server is already running." "${YELLOW}${BOLD}"
+            fi
+            ;;
+        stop)
+            if ps -p $SERVER_PID > /dev/null; then
+                stop_server
+            else
+                animate_text "Server is not running." "${YELLOW}${BOLD}"
+            fi
+            ;;
+        restart)
+            if ps -p $SERVER_PID > /dev/null; then
+                stop_server
+            fi
+            start_server
+            ;;
+        backup)
+            backup_name="manual_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+            animate_text "Creating manual backup..." "${CYAN}"
+            tar -czf "backups/$backup_name" world world_nether world_the_end
+            animate_text "Backup created: $backup_name" "${GREEN}${BOLD}"
+            ;;
+        *)
+            if ps -p $SERVER_PID > /dev/null; then
+                screen -S minecraft -X stuff "$user_input$(printf '\r')"
+            else
+                animate_text "Server is not running. Start it first." "${YELLOW}${BOLD}"
+            fi
+            ;;
+    esac
 }
 
 # Start the server initially
@@ -151,22 +201,42 @@ start_server
 
 # Main loop
 while true; do
-    # Wait for 5 minutes
-    sleep 300
-
-    # Check if any players are connected
-    if ! check_player_connection; then
-        stop_server
-        animate_text "Server is now in standby mode. It will start automatically when a player tries to join." "${CYAN}${BOLD}"
-        
-        # Wait for a player to try to connect
-        while true; do
-            if check_player_connection; then
-                animate_text "Player attempting to connect. Starting server..." "${GREEN}${BOLD}"
-                start_server
-                break
-            fi
-            sleep 10
-        done
+    # Check for user input (non-blocking)
+    if read -t 0.1 -N 1 input; then
+        handle_user_input
     fi
+
+    # Check if server is running
+    if ! ps -p $SERVER_PID > /dev/null; then
+        animate_text "Server has stopped unexpectedly. Restarting..." "${RED}${BOLD}"
+        start_server
+    fi
+
+    # Check for player activity every 5 minutes
+    if ! check_player_connection; then
+        animate_text "No player activity detected. Server will shut down in 5 minutes if no players join." "${YELLOW}${BOLD}"
+        sleep 300
+
+        if ! check_player_connection; then
+            stop_server
+            animate_text "Server is now in standby mode. It will start automatically when a player tries to join." "${CYAN}${BOLD}"
+            
+            # Wait for a player to try to connect
+            while true; do
+                if check_player_connection; then
+                    animate_text "Player attempting to connect. Starting server..." "${GREEN}${BOLD}"
+                    start_server
+                    break
+                fi
+                sleep 10
+
+                # Check for user input during standby
+                if read -t 0.1 -N 1 input; then
+                    handle_user_input
+                fi
+            done
+        fi
+    fi
+
+    sleep 1
 done
