@@ -15,7 +15,6 @@ BLINK='\033[5m'
 
 # Global variables
 SERVER_PID=""
-SERVER_TYPE=""
 SERVER_MEMORY=1024
 SELECTED_SOFTWARE=""
 
@@ -64,15 +63,15 @@ clear_screen() {
     echo -e "\033c"
     cat << "EOF"
 ${BLINK}${BOLD}${colors[bold_cyan]}
-   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████     ███      ▄██   ▄   ▄█       
-  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ▀█████████▄ ███   ██▄ ███       
-  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    █▀     ▀███▀▀██ ███▄▄▄███ ███       
-  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███            ███   ▀ ▀▀▀▀▀▀███ ███       
-▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███            ███     ▄██   ███ ███       
-         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    █▄      ███     ███   ███ ███       
-   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███     ███     ███   ███ ███▌    ▄ 
- ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀     ▄████▀    ▀█████▀  █████▄▄██ 
-                                        ███    ███                                                ▀         
+   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████  ▄████████     ███        ▄█       
+  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ███    ███ ▀█████████▄   ███       
+  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    ███ ███    █▀     ▀███▀▀██   ███       
+  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███    ███ ███            ███   ▀   ███       
+▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███    ███ ███            ███       ███       
+         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    ███ ███    █▄      ███       ███       
+   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███ ███    ███     ███       ███▌    ▄ 
+ ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀  ████████▀     ▄████▀     █████▄▄██ 
+                                        ███    ███                                                   ▀         
 ${NC}
 EOF
     echo
@@ -84,8 +83,8 @@ EOF
     echo
 }
 
-# Show software selection menu
-select_software() {
+# Show software selection menu and download immediately
+select_and_download_software() {
     echo -e "${colors[bold_cyan]}Select Server Software:${NC}"
     echo -e "${colors[white]}1)${NC} ${colors[bold_green]}Paper${NC} (Latest) - High performance fork of Spigot"
     echo -e "${colors[white]}2)${NC} ${colors[bold_yellow]}Forge${NC} (Latest) - Mod support for vanilla Minecraft"
@@ -110,24 +109,10 @@ select_software() {
     esac
     
     animate_gradient_text "Selected $SELECTED_SOFTWARE server software" "00ff00" "0000ff"
-    sleep 2
-}
-
-# Show menu options
-show_menu() {
-    echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${colors[bold_cyan]}║                              Available Commands                               ║${NC}"
-    echo -e "${colors[bold_cyan]}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
-    echo -e "${colors[bold_green]}1)${NC} Start Server      ${colors[bold_yellow]}2)${NC} Stop Server       ${colors[bold_blue]}3)${NC} Restart Server"
-    echo -e "${colors[bold_purple]}4)${NC} Create Backup    ${colors[bold_cyan]}5)${NC} Server Status     ${colors[bold_white]}6)${NC} View Logs"
-    echo -e "${colors[bold_red]}7)${NC} Configure Server ${colors[bold_green]}8)${NC} Exit"
-    echo
-    echo -e "Enter your choice: "
-}
-
-# Download and install server software
-install_server() {
-    animate_gradient_text "Installing $SELECTED_SOFTWARE server..." "00ffff" "ff00ff"
+    sleep 1
+    
+    # Download and install server software
+    animate_gradient_text "Downloading $SELECTED_SOFTWARE server..." "00ffff" "ff00ff"
     
     case $SELECTED_SOFTWARE in
         "paper")
@@ -158,6 +143,16 @@ install_server() {
             curl -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
             ;;
     esac
+
+    # Cool download animation
+    for i in {1..10}; do
+        echo -ne "${colors[bold_cyan]}Downloading${NC} ${colors[bold_yellow]}[${NC}"
+        for ((j=0; j<i; j++)); do echo -ne "▓"; done
+        for ((j=i; j<10; j++)); do echo -ne "░"; done
+        echo -ne "${colors[bold_yellow]}]${NC}\r"
+        sleep 0.5
+    done
+    echo
 
     # Install plugins
     mkdir -p plugins
@@ -246,7 +241,7 @@ set_server_icon() {
 # Start server function
 start_server() {
     if [ ! -f "server.jar" ] && [ ! -f "bungeecord.jar" ]; then
-        install_server
+        select_and_download_software
     fi
 
     configure_server_properties
@@ -268,15 +263,19 @@ start_server() {
 
 # Stop server function
 stop_server() {
-    if [ "$SELECTED_SOFTWARE" = "bungeecord" ]; then
-        kill $SERVER_PID
+    if [ -n "$SERVER_PID" ]; then
+        if [ "$SELECTED_SOFTWARE" = "bungeecord" ]; then
+            kill $SERVER_PID
+        else
+            screen -S minecraft -X stuff "stop$(printf '\r')"
+        fi
+        wait $SERVER_PID 2>/dev/null
+        animate_gradient_text "Server stopped." "ff0000" "ffff00"
+        SERVER_PID=""
+        fancy_progress_bar 2
     else
-        screen -S minecraft -X stuff "stop$(printf '\r')"
+        animate_gradient_text "No server is currently running." "ff0000" "ffff00"
     fi
-    wait $SERVER_PID 2>/dev/null
-    animate_gradient_text "Server stopped." "ff0000" "ffff00"
-    SERVER_PID=""
-    fancy_progress_bar 2
 }
 
 # Create backup function
@@ -303,9 +302,20 @@ show_server_status() {
     fancy_progress_bar 2
 }
 
+# Show menu options
+show_menu() {
+    echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${colors[bold_cyan]}║                              Available Commands                               ║${NC}"
+    echo -e "${colors[bold_cyan]}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${colors[bold_green]}1)${NC} Start Server      ${colors[bold_yellow]}2)${NC} Stop Server       ${colors[bold_blue]}3)${NC} Restart Server"
+    echo -e "${colors[bold_purple]}4)${NC} Create Backup    ${colors[bold_cyan]}5)${NC} Server Status     ${colors[bold_white]}6)${NC} View Logs"
+    echo -e "${colors[bold_red]}7)${NC} Exit"
+    echo
+    echo -e "Enter your choice: "
+}
+
 # Main script execution
 clear_screen
-select_software
 show_menu
 
 # Main loop
@@ -322,11 +332,6 @@ while true; do
         5) show_server_status ;;
         6) less +G logs/latest.log ;;
         7)
-            clear_screen
-            select_software
-            show_menu
-            ;;
-        8)
             animate_gradient_text "Exiting CZARACTYL..." "ff0000" "ffff00"
             stop_server
             exit 0
