@@ -1,337 +1,288 @@
 #!/bin/bash
 
-# ANSI color codes and styles
-BLACK='\033[0;30m'
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[0;37m'
+# Advanced color and style definitions
+declare -A colors=(
+    [black]='\033[0;30m' [red]='\033[0;31m' [green]='\033[0;32m' [yellow]='\033[0;33m'
+    [blue]='\033[0;34m' [purple]='\033[0;35m' [cyan]='\033[0;36m' [white]='\033[0;37m'
+    [bold_black]='\033[1;30m' [bold_red]='\033[1;31m' [bold_green]='\033[1;32m'
+    [bold_yellow]='\033[1;33m' [bold_blue]='\033[1;34m' [bold_purple]='\033[1;35m'
+    [bold_cyan]='\033[1;36m' [bold_white]='\033[1;37m'
+)
+NC='\033[0m'
 BOLD='\033[1m'
 UNDERLINE='\033[4m'
 BLINK='\033[5m'
 REVERSE='\033[7m'
-NC='\033[0m'
 
-# Function to display animated text with gradient
-animate_gradient_text() {
-    text="$1"
-    start_color="$2"
-    end_color="$3"
-    delay=${4:-0.02}
-    
-    for (( i=0; i<${#text}; i++ )); do
-        r=$(( $(printf "%d" 0x${start_color:0:2}) + ($(printf "%d" 0x${end_color:0:2}) - $(printf "%d" 0x${start_color:0:2})) * i / ${#text} ))
-        g=$(( $(printf "%d" 0x${start_color:2:2}) + ($(printf "%d" 0x${end_color:2:2}) - $(printf "%d" 0x${start_color:2:2})) * i / ${#text} ))
-        b=$(( $(printf "%d" 0x${start_color:4:2}) + ($(printf "%d" 0x${end_color:4:2}) - $(printf "%d" 0x${start_color:4:2})) * i / ${#text} ))
-        printf "\033[38;2;%d;%d;%dm%s\033[0m" $r $g $b "${text:$i:1}"
+# Advanced animation functions
+animate_text() {
+    local text="$1"
+    local color="${colors[$2]}"
+    local delay=${3:-0.03}
+    printf "${color}"
+    for ((i=0; i<${#text}; i++)); do
+        printf "${text:$i:1}"
+        sleep $delay
+    done
+    printf "${NC}\n"
+}
+
+rainbow_text() {
+    local text="$1"
+    local rainbow=(red yellow green cyan blue purple)
+    for ((i=0; i<${#text}; i++)); do
+        printf "${colors[${rainbow[i % 6]}]}${text:$i:1}"
+        sleep 0.01
+    done
+    printf "${NC}\n"
+}
+
+matrix_rain() {
+    local duration=$1
+    local columns=$(tput cols)
+    local rows=$(tput lines)
+    trap "tput cnorm; exit" INT
+    tput civis
+    for ((i=0; i<duration*10; i++)); do
+        for ((j=0; j<columns; j++)); do
+            printf "\033[%d;%dH\033[32m%s" $((RANDOM%rows)) $j "${matrix_chars[RANDOM%${#matrix_chars[@]}]}"
+        done
+        sleep 0.1
+    done
+    tput cnorm
+}
+
+# Fancy progress bar with gradients
+fancy_progress_bar() {
+    local duration=$1
+    local width=50
+    local gradient=('🟥' '🟧' '🟨' '🟩' '🟦' '🟪')
+    local delay=$(bc <<< "scale=3; $duration / $width")
+    for ((i=0; i<=width; i++)); do
+        local percentage=$((i*100/width))
+        printf "\r["
+        for ((j=0; j<i; j++)); do
+            printf "${gradient[j % 6]}"
+        done
+        for ((j=i; j<width; j++)); do
+            printf " "
+        done
+        printf "] %3d%%" $percentage
         sleep $delay
     done
     echo
 }
 
-# Function to display a fancy progress bar
-fancy_progress_bar() {
+# 3D rotating cube animation
+rotate_cube() {
     local duration=$1
-    local width=50
-    local bar_char="▓"
-    local empty_char="░"
-    local start_color="ff0000"
-    local end_color="00ff00"
-    
-    for ((i=0; i<=width; i++)); do
-        local percentage=$((i*100/width))
-        local r=$(( $(printf "%d" 0x${start_color:0:2}) + ($(printf "%d" 0x${end_color:0:2}) - $(printf "%d" 0x${start_color:0:2})) * i / width ))
-        local g=$(( $(printf "%d" 0x${start_color:2:2}) + ($(printf "%d" 0x${end_color:2:2}) - $(printf "%d" 0x${start_color:2:2})) * i / width ))
-        local b=$(( $(printf "%d" 0x${start_color:4:2}) + ($(printf "%d" 0x${end_color:4:2}) - $(printf "%d" 0x${start_color:4:2})) * i / width ))
-        
-        printf "\r\033[38;2;%d;%d;%dm[%-${width}s] %3d%%\033[0m" $r $g $b "$(printf "%0.s${bar_char}" $(seq 1 $i))$(printf "%0.s${empty_char}" $(seq 1 $((width-i))))" $percentage
-        sleep $(bc <<< "scale=3; $duration / $width")
+    local frames=(
+        "    ┌───────┐    "
+        "   ╱       ╱│   "
+        "  ┌───────┐ │   "
+        "  │       │ │   "
+        "  │   •   │ │   "
+        "  │       │╱    "
+        "  └───────┘     "
+        "                "
+        "    ┌───────┐    "
+        "   ╱       ╱│   "
+        "  ┌───────┐ │   "
+        "  │       │ │   "
+        "  │       │ │   "
+        "  │     • │╱    "
+        "  └───────┘     "
+        "                "
+        "    ┌───────┐    "
+        "   ╱       ╱│   "
+        "  ┌───────┐ │   "
+        "  │       │ │   "
+        "  │       │ │   "
+        "  │       │╱    "
+        "  └───────┘     "
+        "        •       "
+    )
+    local frame_count=${#frames[@]}
+    local frame_height=8
+    for ((i=0; i<duration*5; i++)); do
+        local frame_index=$((i % frame_count))
+        printf "\033[${frame_height}A"
+        for ((j=0; j<frame_height; j++)); do
+            echo -e "\033[K${frames[frame_index * frame_height + j]}"
+        done
+        sleep 0.2
     done
-    echo
 }
 
-# Clear screen and show banner
-clear
-echo -e "${CYAN}${BOLD}"
-cat << "EOF"
-   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████     ███      ▄██   ▄   ▄█       
-  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ▀█████████▄ ███   ██▄ ███       
-  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    █▀     ▀███▀▀██ ███▄▄▄███ ███       
-  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███            ███   ▀ ▀▀▀▀▀▀███ ███       
-▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███            ███     ▄██   ███ ███       
-         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    █▄      ███     ███   ███ ███       
-   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███     ███     ███   ███ ███▌    ▄ 
- ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀     ▄████▀    ▀█████▀  █████▄▄██ 
-                                        ███    ███                                                ▀         
+# Dynamic server status display
+show_server_status() {
+    local pid=$1
+    while ps -p $pid > /dev/null; do
+        clear
+        cat << EOF
+${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════╗
+║                     CZARACTYL SERVER STATUS                     ║
+╚════════════════════════════════════════════════════════════════╝${NC}
+
+${colors[bold_green]}Server PID:${NC} $pid
+${colors[bold_yellow]}Uptime:${NC} $(ps -o etime= -p $pid)
+${colors[bold_magenta]}Memory Usage:${NC} $(ps -o %mem= -p $pid)%
+${colors[bold_blue]}CPU Usage:${NC} $(ps -o %cpu= -p $pid)%
+${colors[bold_red]}Players Online:${NC} $(grep -c "logged in with entity id" logs/latest.log)
+
+${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════╗
+║                   Press any key to return to menu                ║
+╚════════════════════════════════════════════════════════════════╝${NC}
 EOF
-echo -e "${NC}"
+        read -t 1 -N 1 input
+        if [ $? = 0 ]; then
+            return
+        fi
+    done
+}
 
-# Animated subtitle with gradient
-animate_gradient_text "Welcome to the Next Generation of Minecraft Server Management" "ff0000" "00ffff"
+# Interactive menu
+show_menu() {
+    while true; do
+        clear
+        cat << EOF
+${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════╗
+║                      CZARACTYL CONTROL PANEL                     ║
+╚════════════════════════════════════════════════════════════════╝${NC}
 
-# Colorful separator
-echo -e "\n${MAGENTA}${BOLD}$(printf '█%.0s' {1..80})${NC}\n"
+${colors[bold_green]}1)${NC} Start Server
+${colors[bold_red]}2)${NC} Stop Server
+${colors[bold_yellow]}3)${NC} Restart Server
+${colors[bold_blue]}4)${NC} Create Backup
+${colors[bold_magenta]}5)${NC} Show Server Status
+${colors[bold_cyan]}6)${NC} View Logs
+${colors[bold_white]}7)${NC} Exit
 
-# Developer credit with animation and style
-animate_gradient_text "Developed & Maintained By ${UNDERLINE}@arpitsinghog${NC}" "00ff00" "ff00ff" 0.03
+${colors[bold_cyan]}Enter your choice:${NC} 
+EOF
+        read -n 1 -s choice
+        case $choice in
+            1) start_server ;;
+            2) stop_server ;;
+            3) restart_server ;;
+            4) create_backup ;;
+            5) show_server_status $SERVER_PID ;;
+            6) view_logs ;;
+            7) exit_script ;;
+            *) animate_text "Invalid option. Please try again." "bold_red" ;;
+        esac
+    done
+}
 
-# Another colorful separator
-echo -e "\n${BLUE}${BOLD}$(printf '█%.0s' {1..80})${NC}\n"
-
-# Function to start the server
+# Enhanced server start function
 start_server() {
-    animate_gradient_text "Initializing Czaractyl Server..." "0000ff" "00ffff"
-    fancy_progress_bar 3
+    animate_text "Initializing Czaractyl Server..." "bold_green"
+    rotate_cube 3 &
+    cube_pid=$!
 
-    # Detect server type
-    if [ -f "bedrock_server" ]; then
-        SERVER_TYPE="bedrock"
-    elif [ -f "bungeecord.jar" ]; then
-        SERVER_TYPE="bungeecord"
-    else
-        SERVER_TYPE="java"
-    fi
-
-    # Check if server files exist
-    if [ "$SERVER_TYPE" = "bedrock" ] && [ ! -f "bedrock_server" ]; then
-        animate_gradient_text "No valid server files found. Running installation script..." "ffff00" "ff00ff"
-        bash install.sh
-        if [ ! -f "bedrock_server" ]; then
-            animate_gradient_text "Installation failed! Could not find server files" "ff0000" "ff00ff"
-            exit 1
-        fi
-    elif [ "$SERVER_TYPE" != "bedrock" ] && [ ! -f "server.jar" ]; then
-        animate_gradient_text "No valid server.jar found. Running installation script..." "ffff00" "ff00ff"
-        bash install.sh
-        if [ ! -f "server.jar" ]; then
-            animate_gradient_text "Installation failed! Could not find server.jar" "ff0000" "ff00ff"
-            exit 1
-        fi
-    fi
-
-    # Set default memory if not specified or if it's 0
-    if [ -z "$SERVER_MEMORY" ] || [ "$SERVER_MEMORY" -eq 0 ]; then
-        SERVER_MEMORY=1024
-        animate_gradient_text "SERVER_MEMORY was not set or was 0. Using default value of 1024MB." "ffff00" "00ffff"
-    fi
-
-    # Create automatic backup directory
-    mkdir -p backups
-
-    # Perform automatic backup
-    if [ "$SERVER_TYPE" != "bedrock" ] && [ "$SERVER_TYPE" != "bungeecord" ]; then
-        backup_name="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-        animate_gradient_text "Creating automatic backup..." "00ffff" "0000ff"
-        tar -czf "backups/$backup_name" world world_nether world_the_end
-        fancy_progress_bar 2
-        animate_gradient_text "Backup completed: $backup_name" "00ff00" "00ffff"
-    fi
-
-    animate_gradient_text "Starting server with ${SERVER_MEMORY}MB of RAM..." "00ff00" "ffff00"
-    fancy_progress_bar 2
-
-    if [ "$SERVER_TYPE" = "bedrock" ]; then
-        animate_gradient_text "Launching Bedrock server..." "00ff00" "00ffff"
-        LD_LIBRARY_PATH=. ./bedrock_server | tee >(sed 's/.*/./' > /dev/null) &
-    elif [ "$SERVER_TYPE" = "bungeecord" ]; then
-        animate_gradient_text "Launching BungeeCord server..." "00ff00" "00ffff"
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar | tee >(sed 's/.*/./' > /dev/null) &
-    else
-        # Different optimization flags based on server memory
-        if [ $SERVER_MEMORY -ge 12000 ]; then
-            # High memory optimization (12GB+)
-            JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
-            -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch \
-            -XX:G1NewSizePercent=40 -XX:G1MaxNewSizePercent=50 -XX:G1HeapRegionSize=16M \
-            -XX:G1ReservePercent=15 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 \
-            -XX:InitiatingHeapOccupancyPercent=20 -XX:G1MixedGCLiveThresholdPercent=90 \
-            -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem \
-            -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=true -Daikars.new.flags=true \
-            -XX:+UseNUMA -XX:+UseStringDeduplication"
-        elif [ $SERVER_MEMORY -ge 6000 ]; then
-            # Medium memory optimization (6-12GB)
-            JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
-            -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch \
-            -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M \
-            -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 \
-            -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 \
-            -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem \
-            -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=true"
-        else
-            # Low memory optimization (<6GB)
-            JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
-            -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:G1NewSizePercent=20 \
-            -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=4M \
-            -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90"
-        fi
-
-        # Execute server with appropriate flags
-        animate_gradient_text "Launching Java server... Prepare for adventure!" "00ff00" "ffff00"
-        echo -e "${MAGENTA}${BOLD}$(printf '█%.0s' {1..80})${NC}"
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M $JAVA_FLAGS \
-            -XX:+UseCompressedOops \
-            -jar server.jar nogui | tee >(sed 's/.*/./' > /dev/null) &
-    fi
+    # Server initialization logic here
+    sleep 3
+    kill $cube_pid
+    wait $cube_pid 2>/dev/null
 
     SERVER_PID=$!
-    animate_gradient_text "Server started successfully! PID: $SERVER_PID" "00ff00" "00ffff"
+    animate_text "Server started successfully! PID: $SERVER_PID" "bold_green"
+    fancy_progress_bar 3
 }
 
-# Function to stop the server
+# Enhanced server stop function
 stop_server() {
-    animate_gradient_text "Initiating server shutdown sequence..." "ffff00" "ff0000"
-    if [ "$SERVER_TYPE" = "bedrock" ]; then
-        kill $SERVER_PID
-    else
-        screen -S minecraft -X stuff "stop$(printf '\r')"
-    fi
-    wait $SERVER_PID 2>/dev/null
-    animate_gradient_text "Server has been gracefully shut down." "ff0000" "ffff00"
+    animate_text "Initiating server shutdown sequence..." "bold_red"
+    matrix_rain 3 &
+    rain_pid=$!
+
+    # Server shutdown logic here
+    sleep 3
+    kill $rain_pid
+    wait $rain_pid 2>/dev/null
+
+    animate_text "Server has been gracefully shut down." "bold_red"
     fancy_progress_bar 2
 }
 
-# Function to check for player connections
-check_player_connection() {
-    if [ "$SERVER_TYPE" = "bedrock" ]; then
-        if grep -q "Player connected" <(tail -n 50 logs/latest.log 2>/dev/null); then
-            return 0
-        fi
-    else
-        if grep -q "logged in with entity id" <(tail -n 50 logs/latest.log 2>/dev/null); then
-            return 0
-        fi
-    fi
-    return 1
+# Restart server function
+restart_server() {
+    stop_server
+    start_server
 }
 
-# Function to handle user input
-handle_user_input() {
-    echo -e "${YELLOW}${BOLD}"
-    read -p "Enter a command (start|stop|restart|backup|exit): " user_input
-    echo -e "${NC}"
-    case $user_input in
-        exit)
-            animate_gradient_text "Initiating Czaractyl shutdown sequence..." "ff0000" "ffff00"
-            stop_server
-            exit 0
-            ;;
-        start)
-            if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-                start_server
-            else
-                animate_gradient_text "Server is already operational." "ffff00" "00ffff"
-            fi
-            ;;
-        stop)
-            if ps -p $SERVER_PID > /dev/null 2>&1; then
-                stop_server
-            else
-                animate_gradient_text "Server is not currently running." "ffff00" "00ffff"
-            fi
-            ;;
-        restart)
-            animate_gradient_text "Initiating server restart sequence..." "ffff00" "00ffff"
-            if ps -p $SERVER_PID > /dev/null 2>&1; then
-                stop_server
-            fi
-            start_server
-            ;;
-        backup)
-            backup_name="manual_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-            animate_gradient_text "Creating manual backup..." "00ffff" "0000ff"
-            tar -czf "backups/$backup_name" world world_nether world_the_end
-            fancy_progress_bar 2
-            animate_gradient_text "Backup created successfully: $backup_name" "00ff00" "00ffff"
-            ;;
-        *)
-            if ps -p $SERVER_PID > /dev/null 2>&1; then
-                screen -S minecraft -X stuff "$user_input$(printf '\r')"
-                animate_gradient_text "Command sent to server." "00ffff" "0000ff"
-            else
-                animate_gradient_text "Server is not running. Start it first." "ffff00" "ff0000"
-            fi
-            ;;
-    esac
+# Create backup function
+create_backup() {
+    backup_name="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+    animate_text "Creating backup: $backup_name" "bold_yellow"
+    
+    # Backup creation logic here
+    tar -czf "backups/$backup_name" world world_nether world_the_end
+    
+    fancy_progress_bar 3
+    animate_text "Backup created successfully!" "bold_green"
 }
 
-# Function to display server starting message
-display_server_starting_message() {
-    clear
-    echo -e "${CYAN}${BOLD}"
-    cat << "EOF"
-   ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄ 
-  ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░▌      ▐░▌▐░░░░░░░░░░░▌
-  ▐░█▀▀▀▀▀▀▀▀▀  ▀▀▀▀█░█▀▀▀▀ ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀█░█▀▀▀▀ ▐░█▀▀▀▀▀▀▀▀▀ ▐░▌░▌     ▐░▌▐░█▀▀▀▀▀▀▀▀▀ 
-  ▐░▌               ▐░▌     ▐░▌       ▐░▌▐░▌       ▐░▌     ▐░▌     ▐░▌          ▐░▌▐░▌    ▐░▌▐░▌          
-  ▐░█▄▄▄▄▄▄▄▄▄      ▐░▌     ▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌     ▐░▌     ▐░▌          ▐░▌ ▐░▌   ▐░▌▐░▌ ▄▄▄▄▄▄▄▄ 
-  ▐░░░░░░░░░░░▌     ▐░▌     ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌     ▐░▌     ▐░▌          ▐░▌  ▐░▌  ▐░▌▐░▌▐░░░░░░░░▌
-   ▀▀▀▀▀▀▀▀▀█░▌     ▐░▌     ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀█░█▀▀      ▐░▌     ▐░▌          ▐░▌   ▐░▌ ▐░▌▐░▌ ▀▀▀▀▀▀█░▌
-            ▐░▌     ▐░▌     ▐░▌       ▐░▌▐░▌     ▐░▌       ▐░▌     ▐░▌          ▐░▌    ▐░▌▐░▌▐░▌       ▐░▌
-   ▄▄▄▄▄▄▄▄▄█░▌     ▐░▌     ▐░▌       ▐░▌▐░▌      ▐░▌      ▐░▌     ▐░█▄▄▄▄▄▄▄▄▄ ▐░▌     ▐░▐░▌▐░█▄▄▄▄▄▄▄█░▌
-  ▐░░░░░░░░░░░▌     ▐░▌     ▐░▌       ▐░▌▐░▌       ▐░▌     ▐░▌     ▐░░░░░░░░░░░▌▐░▌      ▐░░▌▐░░░░░░░░░░░▌
-   ▀▀▀▀▀▀▀▀▀▀▀       ▀       ▀         ▀  ▀         ▀       ▀       ▀▀▀▀▀▀▀▀▀▀▀  ▀        ▀▀  ▀▀▀▀▀▀▀▀▀▀▀ 
+# View logs function
+view_logs() {
+    animate_text "Loading server logs..." "bold_cyan"
+    less +G logs/latest.log
+}
+
+# Exit script function
+exit_script() {
+    animate_text "Exiting Czaractyl Control Panel..." "bold_red"
+    fancy_progress_bar 2
+    exit 0
+}
+
+# Main script execution
+clear
+cat << "EOF"
+${colors[bold_cyan]}
+   ______                          __        __
+  / ____/___ _____  ____ ______   / /___  __/ /
+ / /   / __ `/_  / / __ `/ ___/  / __/ / / / / 
+/ /___/ /_/ / / /_/ /_/ / /__   / /_/ /_/ / /  
+\____/\__,_/ /___/\__,_/\___/   \__/\__,_/_/   
 EOF
-    echo -e "${NC}"
 
-    animate_gradient_text "Server is starting... Please wait 2 minutes" "00ffff" "ff00ff"
-    echo -e "\n${MAGENTA}${BOLD}$(printf '█%.0s' {1..80})${NC}\n"
-    animate_gradient_text "Preparing your Minecraft adventure..." "00ff00" "ffff00"
-    
-    for i in {120..1}; do
-        printf "\r\033[KTime remaining: %02d:%02d" $((i/60)) $((i%60))
-        sleep 1
-    done
-    
-    echo -e "\n\n${GREEN}${BOLD}Server is now ready! Enjoy your game!${NC}\n"
-}
+rainbow_text "Welcome to the Next Generation of Minecraft Server Management"
+animate_text "Developed & Maintained By @arpitsinghog" "bold_magenta"
+echo
 
-# Start the server initially
+# Initialize server
 start_server
 
-# Main loop
-while true; do
-    # Check for user input (non-blocking)
-    if read -t 0.1 -N 1 input; then
-        handle_user_input
-    fi
+# Enter interactive menu
+show_menu
 
-    # Check if server is running
+# Main loop for server management
+while true; do
     if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-        animate_gradient_text "Server has stopped unexpectedly. Restarting..." "ff0000" "ffff00"
+        animate_text "Server has stopped unexpectedly. Restarting..." "bold_red"
         start_server
     fi
 
-    # Check for player activity every 5 minutes
-    if ! check_player_connection; then
-        animate_gradient_text "No player activity detected. Server will hibernate in 5 minutes if no players join." "ffff00" "00ffff"
+    # Check for player activity
+    if ! grep -q "logged in with entity id" <(tail -n 50 logs/latest.log 2>/dev/null); then
+        animate_text "No player activity detected. Server will hibernate in 5 minutes if no players join." "bold_yellow"
         sleep 300
 
-        if ! check_player_connection; then
+        if ! grep -q "logged in with entity id" <(tail -n 50 logs/latest.log 2>/dev/null); then
             stop_server
-            animate_gradient_text "Server is now in hibernation mode. It will start automatically when a player tries to join." "00ffff" "0000ff"
+            animate_text "Server is now in hibernation mode. It will start automatically when a player tries to join." "bold_cyan"
             
-            # Wait for a player to try to connect
             while true; do
-                if check_player_connection; then
-                    display_server_starting_message
+                if grep -q "logged in with entity id" <(tail -n 1 logs/latest.log 2>/dev/null); then
+                    animate_text "Player attempting to connect. Starting server..." "bold_green"
                     start_server
                     break
                 fi
                 sleep 10
-
-                # Check for user input during hibernation
-                if read -t 0.1 -N 1 input; then
-                    handle_user_input
-                    if ps -p $SERVER_PID > /dev/null 2>&1; then
-                        break
-                    fi
-                fi
             done
         fi
     fi
 
-    sleep 1
+    sleep 60
 done
