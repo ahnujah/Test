@@ -13,11 +13,6 @@ BOLD='\033[1m'
 UNDERLINE='\033[4m'
 BLINK='\033[5m'
 
-# Global variables
-SERVER_PID=""
-SERVER_MEMORY=1024
-SELECTED_SOFTWARE=""
-
 # Function to display animated text with gradient
 animate_gradient_text() {
     text="$1"
@@ -63,19 +58,19 @@ clear_screen() {
     echo -e "\033c"
     cat << "EOF"
 ${BLINK}${BOLD}${colors[bold_cyan]}
-   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████  ▄████████     ███        ▄█       
-  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ███    ███ ▀█████████▄   ███       
-  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    ███ ███    █▀     ▀███▀▀██   ███       
-  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███    ███ ███            ███   ▀   ███       
-▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███    ███ ███            ███       ███       
-         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    ███ ███    █▄      ███       ███       
-   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███ ███    ███     ███       ███▌    ▄ 
- ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀  ████████▀     ▄████▀     █████▄▄██ 
-                                        ███    ███                                                   ▀         
+   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████  ▄████████    ▄█     ▄██████▄     ▄█       
+  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ███    ███   ███    ███    ███   ███       
+  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    ███ ███    █▀    ███▌   ███    █▀    ███       
+  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███    ███ ███         ▄███▄  ▄███          ███       
+▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███    ███ ███        ▀▀███▀  ▀▀███ ████▄  ███       
+         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    ███ ███    █▄    ███    ███    ███   ███       
+   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███ ███    ███   ███    ███    ███   ███▌    ▄ 
+ ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀  ████████▀    █▀     ████████▀    █████▄▄██ 
+                                        ███    ███                                                          ▀         
 ${NC}
 EOF
     echo
-    animate_gradient_text "Welcome to the Next Generation of Minecraft Server Management" "ff0000" "00ffff" 0.01
+    animate_gradient_text "Welcome to the Ultimate Minecraft Server Management Experience" "ff0000" "00ffff" 0.01
     echo
     echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${colors[bold_cyan]}║                           CZARACTYL CONTROL PANEL                             ║${NC}"
@@ -83,8 +78,8 @@ EOF
     echo
 }
 
-# Show software selection menu and download immediately
-select_and_download_software() {
+# Function to select and install server software
+select_and_install_software() {
     echo -e "${colors[bold_cyan]}Select Server Software:${NC}"
     echo -e "${colors[white]}1)${NC} ${colors[bold_green]}Paper${NC} (Latest) - High performance fork of Spigot"
     echo -e "${colors[white]}2)${NC} ${colors[bold_yellow]}Forge${NC} (Latest) - Mod support for vanilla Minecraft"
@@ -98,23 +93,19 @@ select_and_download_software() {
     read -r choice
 
     case $choice in
-        1) SELECTED_SOFTWARE="paper";;
-        2) SELECTED_SOFTWARE="forge";;
-        3) SELECTED_SOFTWARE="fabric";;
-        4) SELECTED_SOFTWARE="purpur";;
-        5) SELECTED_SOFTWARE="vanilla";;
-        6) SELECTED_SOFTWARE="spigot";;
-        7) SELECTED_SOFTWARE="bungeecord";;
-        *) echo -e "${colors[bold_red]}Invalid choice. Defaulting to Paper.${NC}"; SELECTED_SOFTWARE="paper";;
+        1) software="paper";;
+        2) software="forge";;
+        3) software="fabric";;
+        4) software="purpur";;
+        5) software="vanilla";;
+        6) software="spigot";;
+        7) software="bungeecord";;
+        *) echo -e "${colors[bold_red]}Invalid choice. Defaulting to Paper.${NC}"; software="paper";;
     esac
     
-    animate_gradient_text "Selected $SELECTED_SOFTWARE server software" "00ff00" "0000ff"
-    sleep 1
+    animate_gradient_text "Installing $software server..." "00ff00" "0000ff"
     
-    # Download and install server software
-    animate_gradient_text "Downloading $SELECTED_SOFTWARE server..." "00ffff" "ff00ff"
-    
-    case $SELECTED_SOFTWARE in
+    case $software in
         "paper")
             curl -o server.jar "https://api.papermc.io/v2/projects/paper/versions/1.20.4/builds/latest/downloads/paper-1.20.4-latest.jar"
             ;;
@@ -144,31 +135,24 @@ select_and_download_software() {
             ;;
     esac
 
-    # Cool download animation
-    for i in {1..10}; do
-        echo -ne "${colors[bold_cyan]}Downloading${NC} ${colors[bold_yellow]}[${NC}"
-        for ((j=0; j<i; j++)); do echo -ne "▓"; done
-        for ((j=i; j<10; j++)); do echo -ne "░"; done
-        echo -ne "${colors[bold_yellow]}]${NC}\r"
-        sleep 0.5
-    done
-    echo
-
-    # Install plugins
-    mkdir -p plugins
-    animate_gradient_text "Installing Chunky plugin..." "00ff00" "00ffff"
-    curl -o plugins/Chunky.jar "https://modrinth.com/plugin/chunky/versions/latest/download"
-    animate_gradient_text "Installing Hibernate plugin..." "00ffff" "ff00ff"
-    curl -o plugins/Hibernate.jar "https://github.com/SeerMCPE/Hibernate/releases/download/v1.0.0/Hibernate-1.0.0.jar"
-
-    animate_gradient_text "Server installation completed!" "00ff00" "ffff00"
     fancy_progress_bar 3
+    animate_gradient_text "Server software installed successfully!" "00ff00" "ffff00"
 }
 
-# Configure server properties
+# Function to install plugins
+install_plugins() {
+    animate_gradient_text "Installing plugins..." "00ffff" "ff00ff"
+    mkdir -p plugins
+    curl -o plugins/Chunky.jar "https://modrinth.com/plugin/chunky/versions/latest/download"
+    curl -o plugins/Hibernate.jar "https://github.com/SeerMCPE/Hibernate/releases/download/v1.0.0/Hibernate-1.0.0.jar"
+    fancy_progress_bar 2
+    animate_gradient_text "Plugins installed successfully!" "00ff00" "ffff00"
+}
+
+# Function to configure server properties
 configure_server_properties() {
-    if [ ! -f "server.properties" ]; then
-        cat > server.properties << EOL
+    animate_gradient_text "Configuring server properties..." "ffff00" "00ffff"
+    cat > server.properties << EOL
 #Minecraft server properties
 #$(date)
 enable-jmx-monitoring=false
@@ -228,118 +212,16 @@ spawn-protection=16
 resource-pack-sha1=
 max-world-size=29999984
 EOL
-    fi
-}
-
-# Set server icon
-set_server_icon() {
-    if [ ! -f "server-icon.png" ]; then
-        curl -o server-icon.png "https://example.com/your-server-icon.png"
-    fi
-}
-
-# Start server function
-start_server() {
-    if [ ! -f "server.jar" ] && [ ! -f "bungeecord.jar" ]; then
-        select_and_download_software
-    fi
-
-    configure_server_properties
-    set_server_icon
-
-    animate_gradient_text "Starting server..." "00ff00" "ffff00"
-    
-    if [ "$SELECTED_SOFTWARE" = "bungeecord" ]; then
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -jar bungeecord.jar &
-    else
-        java -Xms${SERVER_MEMORY}M -Xmx${SERVER_MEMORY}M -XX:+UseG1GC -XX:+ParallelRefProcEnabled \
-             -XX:MaxGCPauseMillis=200 -jar server.jar nogui &
-    fi
-
-    SERVER_PID=$!
-    animate_gradient_text "Server started successfully! PID: $SERVER_PID" "00ff00" "00ffff"
-    fancy_progress_bar 3
-}
-
-# Stop server function
-stop_server() {
-    if [ -n "$SERVER_PID" ]; then
-        if [ "$SELECTED_SOFTWARE" = "bungeecord" ]; then
-            kill $SERVER_PID
-        else
-            screen -S minecraft -X stuff "stop$(printf '\r')"
-        fi
-        wait $SERVER_PID 2>/dev/null
-        animate_gradient_text "Server stopped." "ff0000" "ffff00"
-        SERVER_PID=""
-        fancy_progress_bar 2
-    else
-        animate_gradient_text "No server is currently running." "ff0000" "ffff00"
-    fi
-}
-
-# Create backup function
-create_backup() {
-    backup_name="backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-    animate_gradient_text "Creating backup..." "00ffff" "ff00ff"
-    mkdir -p backups
-    tar -czf "backups/$backup_name" world world_nether world_the_end plugins config
-    animate_gradient_text "Backup created: $backup_name" "00ff00" "ffff00"
     fancy_progress_bar 2
-}
-
-# Show server status
-show_server_status() {
-    echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${colors[bold_cyan]}║                               Server Status                                   ║${NC}"
-    echo -e "${colors[bold_cyan]}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
-    echo -e "${colors[bold_green]}Software:${NC} $SELECTED_SOFTWARE"
-    echo -e "${colors[bold_yellow]}PID:${NC} $SERVER_PID"
-    echo -e "${colors[bold_blue]}CPU:${NC} $(ps -p $SERVER_PID -o %cpu= 2>/dev/null || echo "0.00")%"
-    echo -e "${colors[bold_purple]}Memory:${NC} $(ps -p $SERVER_PID -o %mem= 2>/dev/null || echo "0.00")%"
-    echo -e "${colors[bold_cyan]}Uptime:${NC} $(ps -o etime= -p $SERVER_PID 2>/dev/null || echo "00:00")"
-    echo -e "${colors[bold_white]}Players:${NC} $(grep -c "logged in with entity id" logs/latest.log 2>/dev/null || echo "0")"
-    fancy_progress_bar 2
-}
-
-# Show menu options
-show_menu() {
-    echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${colors[bold_cyan]}║                              Available Commands                               ║${NC}"
-    echo -e "${colors[bold_cyan]}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
-    echo -e "${colors[bold_green]}1)${NC} Start Server      ${colors[bold_yellow]}2)${NC} Stop Server       ${colors[bold_blue]}3)${NC} Restart Server"
-    echo -e "${colors[bold_purple]}4)${NC} Create Backup    ${colors[bold_cyan]}5)${NC} Server Status     ${colors[bold_white]}6)${NC} View Logs"
-    echo -e "${colors[bold_red]}7)${NC} Exit"
-    echo
-    echo -e "Enter your choice: "
+    animate_gradient_text "Server properties configured successfully!" "00ff00" "ffff00"
 }
 
 # Main script execution
 clear_screen
-show_menu
+select_and_install_software
+install_plugins
+configure_server_properties
 
-# Main loop
-while true; do
-    read -r choice
-    case $choice in
-        1) start_server ;;
-        2) stop_server ;;
-        3) 
-            stop_server
-            start_server
-            ;;
-        4) create_backup ;;
-        5) show_server_status ;;
-        6) less +G logs/latest.log ;;
-        7)
-            animate_gradient_text "Exiting CZARACTYL..." "ff0000" "ffff00"
-            stop_server
-            exit 0
-            ;;
-        *)
-            animate_gradient_text "Invalid option. Please try again." "ff0000" "ff00ff"
-            ;;
-    esac
-    echo
-    show_menu
-done
+animate_gradient_text "CZARACTYL setup completed successfully!" "ff00ff" "00ffff"
+echo -e "${colors[bold_green]}Your Minecraft server is now ready to start.${NC}"
+echo -e "${colors[bold_yellow]}Run 'java -jar server.jar' to start your server.${NC}"
