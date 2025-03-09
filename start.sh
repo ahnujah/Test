@@ -1,154 +1,145 @@
 #!/bin/bash
 
-# Secure script execution
-set -euo pipefail
-IFS=$'\n\t'
+# AuraNodes Minecraft Server Installer & Launcher
+# This script installs and runs various Minecraft server types
+# Compatible with Pterodactyl Panel
 
-# Check if running as root or with sudo
-if [ "$EUID" -ne 0 ]; then 
-    echo "Please run with sudo or as root"
-    exit 1
-fi
+# ANSI color codes for beautiful output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m' # No Color
 
-# Required system packages
-REQUIRED_PACKAGES=(
-    "unzip"
-    "curl"
-    "wget"
-    "java-17-openjdk"
-    "bc"
-    "screen"
-)
-
-# ANSI color codes with fallback for terminals that don't support colors
-if [ -t 1 ]; then
-    declare -A colors=(
-        [reset]='\033[0m'
-        [black]='\033[0;30m'
-        [red]='\033[0;31m'
-        [green]='\033[0;32m'
-        [yellow]='\033[0;33m'
-        [blue]='\033[0;34m'
-        [purple]='\033[0;35m'
-        [cyan]='\033[0;36m'
-        [white]='\033[0;37m'
-        [bold]='\033[1m'
-        [dim]='\033[2m'
-        [underline]='\033[4m'
-        [blink]='\033[5m'
-        [reverse]='\033[7m'
-        [hidden]='\033[8m'
-    )
-else
-    declare -A colors=(
-        [reset]='' [black]='' [red]='' [green]='' [yellow]=''
-        [blue]='' [purple]='' [cyan]='' [white]='' [bold]=''
-        [dim]='' [underline]='' [blink]='' [reverse]='' [hidden]=''
-    )
-fi
-
-# Logging functions
-log_info() { echo -e "${colors[cyan]}[INFO]${colors[reset]} $1"; }
-log_success() { echo -e "${colors[green]}[SUCCESS]${colors[reset]} $1"; }
-log_warning() { echo -e "${colors[yellow]}[WARNING]${colors[reset]} $1"; }
-log_error() { echo -e "${colors[red]}[ERROR]${colors[reset]} $1"; }
-
-# Error handling
-trap 'handle_error $? $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
-
-handle_error() {
-    local exit_code=$1
-    local line_no=$2
-    local bash_lineno=$3
-    local last_command=$4
-    local func_trace=$5
-    log_error "Error occurred in script at line: $line_no"
-    log_error "Last command executed: $last_command"
-    log_error "Exit code: $exit_code"
-    cleanup
-    exit $exit_code
-}
-
-# Cleanup function
-cleanup() {
-    log_info "Performing cleanup..."
-    # Remove temporary files
-    rm -f /tmp/auranodes-*
-    # Kill any hanging processes
-    pkill -f "auranodes-tmp" || true
-}
-
-# Check and install required packages
-check_dependencies() {
-    log_info "Checking system dependencies..."
-    local missing_packages=()
+# Function to display animated text
+animate_text() {
+    text="$1"
+    color="$2"
+    sleep_time="${3:-0.03}"
     
-    for package in "${REQUIRED_PACKAGES[@]}"; do
-        if ! command -v "${package%%-*}" &> /dev/null; then
-            missing_packages+=("$package")
+    for (( i=0; i<${#text}; i++ )); do
+        echo -ne "${color}${text:$i:1}${NC}"
+        sleep $sleep_time
+    done
+    echo
+}
+
+# Function to display a fancy progress bar
+show_progress() {
+    local duration=$1
+    local message=$2
+    local width=50
+    local bar_char="█"
+    local empty_char="░"
+    local colors=("${RED}" "${YELLOW}" "${GREEN}" "${CYAN}" "${BLUE}" "${PURPLE}")
+    
+    echo -ne "${message} "
+    
+    for ((i=0; i<=width; i++)); do
+        local color_index=$((i % 6))
+        local percent=$((i*100/width))
+        
+        # Calculate how many bar characters to show
+        local bar_count=$i
+        local empty_count=$((width-i))
+        
+        echo -ne "\r${message} ["
+        
+        # Print the colored progress bar
+        for ((j=0; j<bar_count; j++)); do
+            local color_j=$((j % 6))
+            echo -ne "${colors[$color_j]}${bar_char}"
+        done
+        
+        # Print the empty part of the bar
+        for ((j=0; j<empty_count; j++)); do
+            echo -ne "${empty_char}"
+        done
+        
+        echo -ne "] ${percent}%"
+        
+        sleep $(echo "scale=3; $duration/$width" | bc)
+    done
+    
+    echo -e "\r${message} [${GREEN}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${bar_char}${NC}] ${GREEN}100%${NC}"
+}
+
+# Function to display the banner
+show_banner() {
+    clear
+    echo -e "${CYAN}"
+    cat << "EOF"
+    ___                      _   __           __         
+   /   | __  __________     / | / /___  ____/ /__  _____
+  / /| |/ / / / ___/ _ \   /  |/ / __ \/ __  / _ \/ ___/
+ / ___ / /_/ / /  /  __/  / /|  / /_/ / /_/ /  __(__  ) 
+/_/  |_\__,_/_/   \___/  /_/ |_/\____/\__,_/\___/____/  
+                                                         
+EOF
+    echo -e "${NC}"
+    animate_text "Ultimate Minecraft Server Management" "${YELLOW}" 0.02
+    echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${WHITE}Version: 2.1.0 | Optimized for Pterodactyl${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
+    echo
+}
+
+# Function to check and install dependencies
+check_dependencies() {
+    local dependencies=("curl" "wget" "unzip" "java" "screen" "bc")
+    local missing_deps=()
+    
+    for dep in "${dependencies[@]}"; do
+        if ! command -v $dep &> /dev/null; then
+            missing_deps+=("$dep")
         fi
     done
     
-    if [ ${#missing_packages[@]} -ne 0 ]; then
-        log_warning "Installing missing packages: ${missing_packages[*]}"
+    if [ ${#missing_deps[@]} -ne 0 ]; then
+        echo -e "${YELLOW}Installing required dependencies: ${missing_deps[*]}${NC}"
         if command -v apt-get &> /dev/null; then
-            apt-get update
-            apt-get install -y "${missing_packages[@]}"
+            apt-get update -qq
+            apt-get install -y -qq "${missing_deps[@]}"
         elif command -v yum &> /dev/null; then
-            yum install -y "${missing_packages[@]}"
+            yum install -y -q "${missing_deps[@]}"
         else
-            log_error "Package manager not supported. Please install manually: ${missing_packages[*]}"
+            echo -e "${RED}Unsupported package manager. Please install dependencies manually.${NC}"
             exit 1
         fi
     fi
 }
 
-# Display fancy banner
-show_banner() {
-    clear
-    cat << "EOF"
-${colors[cyan]}${colors[bold]}
-    ▄▄▄       █    ██  ██▀███   ▄▄▄       ███▄    █  ▒█████  ▓█████▄ ▓█████   ██████ 
-   ▒████▄     ██  ▓██▒▓██ ▒ ██▒▒████▄     ██ ▀█   █ ▒██▒  ██▒▒██▀ ██▌▓█   ▀ ▒██    ▒ 
-   ▒██  ▀█▄  ▓██  ▒██░▓██ ░▄█ ▒▒██  ▀█▄  ▓██  ▀█ ██▒▒██░  ██▒░██   █▌▒███   ░ ▓██▄   
-   ░██▄▄▄▄██ ▓▓█  ░██░▒██▀▀█▄  ░██▄▄▄▄██ ▓██▒  ▐▌██▒▒██   ██░░▓█▄   ▌▒▓█  ▄   ▒   ██▒
-    ▓█   ▓██▒▒▒█████▓ ░██▓ ▒██▒ ▓█   ▓██▒▒██░   ▓██░░ ████▓▒░░▒████▓ ░▒████▒▒██████▒▒
-    ▒▒   ▓▒█░░▒▓▒ ▒ ▒ ░ ▒▓ ░▒▓░ ▒▒   ▓▒█░░ ▒░   ▒ ▒ ░ ▒░▒░▒░  ▒▒▓  ▒ ░░ ▒░ ░▒ ▒▓▒ ▒ ░
-     ▒   ▒▒ ░░░▒░ ░ ░   ░▒ ░ ▒░  ▒   ▒▒ ░░ ░░   ░ ▒░  ░ ▒ ▒░  ░ ▒  ▒  ░ ░  ░░ ░▒  ░ ░
-     ░   ▒    ░░░ ░ ░   ░░   ░   ░   ▒      ░   ░ ░ ░ ░ ░ ▒   ░ ░  ░    ░   ░  ░  ░  
-         ░  ░   ░        ░           ░  ░         ░     ░ ░     ░       ░  ░      ░  
-${colors[reset]}
-EOF
-    echo -e "${colors[cyan]}${colors[bold]}════════════════════════ PREMIUM GAME HOSTING ════════════════════════${colors[reset]}"
-    echo
-}
-
-# Function to check Java version and set appropriate flags
+# Function to detect Java version and set appropriate flags
 setup_java() {
-    log_info "Configuring Java environment..."
-    
-    # Detect Java version
-    if ! command -v java &> /dev/null; then
-        log_error "Java not found. Please install Java 17 or later."
-        exit 1
-    }
-    
-    JAVA_VERSION=$(java -version 2>&1 | head -n 1 | cut -d'"' -f2 | cut -d'.' -f1)
-    if [ "$JAVA_VERSION" -lt 17 ]; then
-        log_warning "Java version $JAVA_VERSION detected. Recommended version is 17 or later."
-    }
-    
-    # Optimize Java flags based on available memory
-    TOTAL_MEMORY=$(free -m | awk '/^Mem:/{print $2}')
-    if [ "$TOTAL_MEMORY" -gt 8192 ]; then
-        MAX_MEMORY="4G"
-    elif [ "$TOTAL_MEMORY" -gt 4096 ]; then
-        MAX_MEMORY="2G"
+    # Get Java version
+    if command -v java &> /dev/null; then
+        JAVA_VERSION=$(java -version 2>&1 | head -n 1 | cut -d'"' -f2 | cut -d'.' -f1)
+        echo -e "${BLUE}Detected Java version: $JAVA_VERSION${NC}"
     else
-        MAX_MEMORY="1G"
+        echo -e "${RED}Java not found. Please install Java 8 or higher.${NC}"
+        exit 1
     fi
     
-    # Aikar's flags for optimal performance
+    # Set memory allocation
+    if [ -z "$MEMORY" ]; then
+        TOTAL_MEMORY=$(free -m | awk '/^Mem:/{print $2}')
+        if [ "$TOTAL_MEMORY" -gt 8000 ]; then
+            MEMORY="4G"
+        elif [ "$TOTAL_MEMORY" -gt 4000 ]; then
+            MEMORY="2G"
+        elif [ "$TOTAL_MEMORY" -gt 2000 ]; then
+            MEMORY="1G"
+        else
+            MEMORY="512M"
+        fi
+    fi
+    
+    echo -e "${GREEN}Memory allocation set to: $MEMORY${NC}"
+    
+    # Aikar's optimized JVM flags
     JAVA_FLAGS=(
         "-XX:+UseG1GC"
         "-XX:+ParallelRefProcEnabled"
@@ -173,104 +164,407 @@ setup_java() {
     )
 }
 
-# Function to detect and validate server type
-detect_server() {
-    log_info "Detecting server type..."
+# Function to download and install server software
+install_server() {
+    local server_type=$1
+    local mc_version=${2:-"latest"}
     
-    if [ -f ".server-type" ]; then
-        SERVER_TYPE=$(cat .server-type)
-    elif [ -f "server.jar" ]; then
-        # Analyze server.jar to determine type
-        if unzip -p server.jar META-INF/MANIFEST.MF | grep -q "Paper"; then
-            SERVER_TYPE="paper"
-        elif unzip -p server.jar META-INF/MANIFEST.MF | grep -q "Forge"; then
-            SERVER_TYPE="forge"
-        elif unzip -p server.jar META-INF/MANIFEST.MF | grep -q "Fabric"; then
-            SERVER_TYPE="fabric"
-        else
-            SERVER_TYPE="vanilla"
-        fi
-        echo "$SERVER_TYPE" > .server-type
-    else
-        log_error "No server jar found!"
-        exit 1
-    fi
+    echo -e "${CYAN}Installing $server_type server (Minecraft $mc_version)...${NC}"
     
-    log_success "Detected server type: $SERVER_TYPE"
-}
-
-# Function to start the server
-start_server() {
-    log_info "Starting $SERVER_TYPE server..."
-    
-    # Create server session name
-    SESSION_NAME="mc_${SERVER_TYPE}_$(date +%s)"
-    
-    # Check if server is already running
-    if screen -list | grep -q "$SESSION_NAME"; then
-        log_error "Server is already running!"
-        exit 1
-    }
-    
-    # Ensure eula is accepted
-    if [ ! -f "eula.txt" ] || ! grep -q "eula=true" eula.txt; then
-        echo "eula=true" > eula.txt
-    }
-    
-    # Start server in screen session
-    case "$SERVER_TYPE" in
-        "paper"|"vanilla")
-            screen -dmS "$SESSION_NAME" java "${JAVA_FLAGS[@]}" -Xms512M -Xmx"$MAX_MEMORY" -jar server.jar nogui
+    case $server_type in
+        "paper")
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            # Get latest build for the specified version
+            build_info=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/$mc_version")
+            latest_build=$(echo $build_info | grep -o '"builds":\[[0-9,]*\]' | grep -o '[0-9]*' | tail -1)
+            
+            if [ -z "$latest_build" ]; then
+                echo -e "${RED}Failed to get latest build for Paper $mc_version${NC}"
+                exit 1
+            fi
+            
+            download_url="https://api.papermc.io/v2/projects/paper/versions/$mc_version/builds/$latest_build/downloads/paper-$mc_version-$latest_build.jar"
+            wget -O server.jar "$download_url"
+            
+            echo "paper" > .server-type
             ;;
+            
         "forge")
-            screen -dmS "$SESSION_NAME" java "${JAVA_FLAGS[@]}" -Xms512M -Xmx"$MAX_MEMORY" @user_jvm_args.txt @libraries/net/minecraftforge/forge/*/unix_args.txt nogui
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            # Get latest Forge version for the specified Minecraft version
+            forge_version="49.0.14" # This would ideally be fetched dynamically
+            
+            download_url="https://maven.minecraftforge.net/net/minecraftforge/forge/$mc_version-$forge_version/forge-$mc_version-$forge_version-installer.jar"
+            wget -O forge-installer.jar "$download_url"
+            
+            show_progress 3 "Installing Forge"
+            java -jar forge-installer.jar --installServer
+            
+            # Clean up installer
+            rm forge-installer.jar
+            
+            # Find the forge jar
+            forge_jar=$(find . -name "forge-$mc_version-$forge_version*.jar" | grep -v installer | head -1)
+            if [ -z "$forge_jar" ]; then
+                forge_jar=$(find . -name "forge-*.jar" | grep -v installer | head -1)
+            fi
+            
+            if [ -z "$forge_jar" ]; then
+                echo -e "${RED}Failed to find Forge server jar${NC}"
+                exit 1
+            fi
+            
+            echo "forge" > .server-type
+            echo "$forge_jar" > .forge-jar
             ;;
+            
         "fabric")
-            screen -dmS "$SESSION_NAME" java "${JAVA_FLAGS[@]}" -Xms512M -Xmx"$MAX_MEMORY" -jar fabric-server-launch.jar nogui
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            # Download Fabric installer
+            wget -O fabric-installer.jar "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.2/fabric-installer-0.11.2.jar"
+            
+            show_progress 3 "Installing Fabric"
+            java -jar fabric-installer.jar server -mcversion $mc_version -downloadMinecraft
+            
+            # Clean up installer
+            rm fabric-installer.jar
+            
+            echo "fabric" > .server-type
             ;;
+            
+        "purpur")
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            download_url="https://api.purpurmc.org/v2/purpur/$mc_version/latest/download"
+            wget -O server.jar "$download_url"
+            
+            echo "purpur" > .server-type
+            ;;
+            
+        "spigot")
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            # Download BuildTools
+            wget -O BuildTools.jar "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
+            
+            show_progress 5 "Building Spigot (this may take a while)"
+            java -jar BuildTools.jar --rev $mc_version
+            
+            # Clean up BuildTools
+            rm BuildTools.jar
+            
+            # Move the built jar to server.jar
+            if [ -f "spigot-$mc_version.jar" ]; then
+                mv "spigot-$mc_version.jar" server.jar
+            else
+                echo -e "${RED}Failed to build Spigot server jar${NC}"
+                exit 1
+            fi
+            
+            echo "spigot" > .server-type
+            ;;
+            
+        "vanilla")
+            if [ "$mc_version" == "latest" ]; then
+                mc_version="1.20.4"
+            fi
+            
+            # This is a simplified approach - in a real script you'd want to fetch the actual latest version
+            download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar"
+            wget -O server.jar "$download_url"
+            
+            echo "vanilla" > .server-type
+            ;;
+            
+        "bungeecord")
+            download_url="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+            wget -O server.jar "$download_url"
+            
+            echo "bungeecord" > .server-type
+            ;;
+            
+        "velocity")
+            download_url="https://api.papermc.io/v2/projects/velocity/versions/3.2.0-SNAPSHOT/builds/263/downloads/velocity-3.2.0-SNAPSHOT-263.jar"
+            wget -O server.jar "$download_url"
+            
+            echo "velocity" > .server-type
+            ;;
+            
         *)
-            log_error "Unsupported server type: $SERVER_TYPE"
+            echo -e "${RED}Unsupported server type: $server_type${NC}"
             exit 1
             ;;
     esac
     
-    # Monitor startup
-    log_info "Server starting... Monitoring startup process"
-    tail -f logs/latest.log | while read -r line; do
-        if echo "$line" | grep -q "Done"; then
-            log_success "Server started successfully!"
-            break
-        elif echo "$line" | grep -q "Error"; then
-            log_error "Server failed to start. Check logs for details."
-            cleanup
-            exit 1
-        fi
-    done
+    echo -e "${GREEN}Server software installed successfully!${NC}"
 }
 
-# Main execution
+# Function to install plugins
+install_plugins() {
+    local server_type=$(cat .server-type)
+    
+    # Skip plugin installation for certain server types
+    if [[ "$server_type" == "vanilla" || "$server_type" == "forge" || "$server_type" == "bungeecord" || "$server_type" == "velocity" ]]; then
+        echo -e "${YELLOW}Skipping plugin installation for $server_type server${NC}"
+        return
+    fi
+    
+    echo -e "${CYAN}Installing essential plugins...${NC}"
+    mkdir -p plugins
+    
+    # Define plugins to install based on server type
+    declare -A plugins
+    
+    # Common plugins for all supported server types
+    plugins["essentialsx"]="https://github.com/EssentialsX/Essentials/releases/download/2.20.1/EssentialsX-2.20.1.jar"
+    plugins["luckperms"]="https://download.luckperms.net/1515/bukkit/loader/LuckPerms-Bukkit-5.4.102.jar"
+    plugins["vault"]="https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
+    
+    # Paper/Spigot/Purpur specific plugins
+    if [[ "$server_type" == "paper" || "$server_type" == "spigot" || "$server_type" == "purpur" ]]; then
+        plugins["worldedit"]="https://dev.bukkit.org/projects/worldedit/files/latest"
+        plugins["chunky"]="https://cdn.modrinth.com/data/fALzjamp/versions/ytBhnGfO/Chunky-Bukkit-1.4.28.jar"
+    fi
+    
+    # Download each plugin
+    for plugin in "${!plugins[@]}"; do
+        echo -e "${BLUE}Downloading $plugin...${NC}"
+        wget -q --show-progress -O "plugins/${plugin}.jar" "${plugins[$plugin]}"
+    done
+    
+    echo -e "${GREEN}Plugins installed successfully!${NC}"
+}
+
+# Function to configure server properties
+configure_server() {
+    local server_type=$(cat .server-type)
+    
+    echo -e "${CYAN}Configuring server...${NC}"
+    
+    # Create server.properties for Minecraft servers
+    if [[ "$server_type" != "bungeecord" && "$server_type" != "velocity" ]]; then
+        if [ ! -f "server.properties" ]; then
+            cat > server.properties << EOL
+#Minecraft server properties
+#Generated by AuraNodes
+server-port=${SERVER_PORT:-25565}
+motd=\\u00A7b\\u00A7lAuraNodes \\u00A78| \\u00A7fPremium Game Hosting
+enable-command-block=true
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+max-players=20
+online-mode=true
+allow-flight=true
+white-list=false
+difficulty=normal
+gamemode=survival
+EOL
+        fi
+    fi
+    
+    # Create config for BungeeCord
+    if [ "$server_type" == "bungeecord" ] && [ ! -f "config.yml" ]; then
+        cat > config.yml << EOL
+server_connect_timeout: 5000
+listeners:
+- query_port: 25577
+  motd: '&b&lAuraNodes &8| &fPremium Game Hosting'
+  tab_list: GLOBAL_PING
+  query_enabled: false
+  proxy_protocol: false
+  forced_hosts:
+    pvp.md-5.net: pvp
+  ping_passthrough: false
+  priorities:
+  - lobby
+  bind_local_address: true
+  host: 0.0.0.0:${SERVER_PORT:-25565}
+  max_players: 500
+  tab_size: 60
+  force_default_server: false
+EOL
+    fi
+    
+    # Create config for Velocity
+    if [ "$server_type" == "velocity" ] && [ ! -f "velocity.toml" ]; then
+        cat > velocity.toml << EOL
+# Velocity configuration
+
+# The bind address for the server
+bind = "0.0.0.0:${SERVER_PORT:-25565}"
+
+# The motd for the server
+motd = "&b&lAuraNodes &8| &fPremium Game Hosting"
+
+# The maximum number of players on the server
+show-max-players = 500
+
+# Whether to enable player info forwarding
+player-info-forwarding-mode = "NONE"
+
+# The forwarding secret for player info forwarding
+forwarding-secret = ""
+
+# Whether to announce server information to the proxy
+announce-forge = false
+
+# Whether to enable online mode
+online-mode = true
+
+# Whether to enable the query protocol
+enable-query = false
+
+# The port for the query protocol
+query-port = 25577
+
+# Whether to enable compression
+enable-compression = true
+
+# The threshold for compression
+compression-threshold = 256
+
+# The level of compression
+compression-level = 3
+
+# The timeout for connections
+connection-timeout = 5000
+
+# The timeout for read operations
+read-timeout = 30000
+
+# The servers to connect to
+[servers]
+  lobby = "127.0.0.1:25566"
+  survival = "127.0.0.1:25567"
+EOL
+    fi
+    
+    # Accept EULA
+    echo "eula=true" > eula.txt
+    
+    # Create server icon if it doesn't exist
+    if [ ! -f "server-icon.png" ]; then
+        echo -e "${BLUE}Downloading server icon...${NC}"
+        wget -q -O server-icon.png "https://i.imgur.com/4KbNMKs.png"
+    fi
+    
+    echo -e "${GREEN}Server configured successfully!${NC}"
+}
+
+# Function to start the server
+start_server() {
+    local server_type=$(cat .server-type)
+    
+    echo -e "${CYAN}Starting $server_type server...${NC}"
+    
+    # Set memory allocation
+    if [ -z "$MEMORY" ]; then
+        MEMORY="1G"
+    fi
+    
+    # Start the server based on type
+    case $server_type in
+        "paper"|"spigot"|"purpur"|"vanilla")
+            java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} -jar server.jar nogui
+            ;;
+        "forge")
+            forge_jar=$(cat .forge-jar)
+            if [ -f "user_jvm_args.txt" ]; then
+                java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} @user_jvm_args.txt @libraries/net/minecraftforge/forge/*/unix_args.txt nogui
+            else
+                java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} -jar $forge_jar nogui
+            fi
+            ;;
+        "fabric")
+            if [ -f "fabric-server-launch.jar" ]; then
+                java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} -jar fabric-server-launch.jar nogui
+            else
+                java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} -jar server.jar nogui
+            fi
+            ;;
+        "bungeecord"|"velocity")
+            java -Xms512M -Xmx$MEMORY -jar server.jar
+            ;;
+        *)
+            echo -e "${RED}Unknown server type: $server_type${NC}"
+            exit 1
+            ;;
+    esac
+}
+
+# Main function
 main() {
-    # Set script permissions
-    chmod 700 "$0"
-    
-    # Show banner
     show_banner
-    
-    # Check dependencies
     check_dependencies
-    
-    # Setup Java environment
     setup_java
     
-    # Detect server type
-    detect_server
+    # Check if server is already installed
+    if [ -f ".server-type" ]; then
+        echo -e "${GREEN}Server already installed: $(cat .server-type)${NC}"
+    else
+        # Display server type selection menu
+        echo -e "${CYAN}Select server software to install:${NC}"
+        echo -e "${WHITE}1)${NC} ${GREEN}Paper${NC} - High performance fork with plugin support (Recommended)"
+        echo -e "${WHITE}2)${NC} ${YELLOW}Forge${NC} - For modded Minecraft"
+        echo -e "${WHITE}3)${NC} ${BLUE}Fabric${NC} - Lightweight, modular mod loader"
+        echo -e "${WHITE}4)${NC} ${PURPLE}Purpur${NC} - Fork of Paper with additional features"
+        echo -e "${WHITE}5)${NC} ${WHITE}Vanilla${NC} - Official Minecraft server"
+        echo -e "${WHITE}6)${NC} ${RED}Spigot${NC} - Optimized CraftBukkit fork"
+        echo -e "${WHITE}7)${NC} ${CYAN}BungeeCord${NC} - Proxy server for connecting multiple servers"
+        echo -e "${WHITE}8)${NC} ${BLUE}Velocity${NC} - Modern, high-performance proxy server"
+        echo
+        
+        # Get server type selection
+        read -p "Enter your choice (1-8): " choice
+        
+        case $choice in
+            1) server_type="paper";;
+            2) server_type="forge";;
+            3) server_type="fabric";;
+            4) server_type="purpur";;
+            5) server_type="vanilla";;
+            6) server_type="spigot";;
+            7) server_type="bungeecord";;
+            8) server_type="velocity";;
+            *) echo -e "${RED}Invalid choice. Defaulting to Paper.${NC}"; server_type="paper";;
+        esac
+        
+        # Get Minecraft version
+        echo
+        echo -e "${CYAN}Enter Minecraft version (e.g., 1.20.4) or press Enter for latest:${NC}"
+        read -p "> " mc_version
+        
+        if [ -z "$mc_version" ]; then
+            mc_version="latest"
+        fi
+        
+        # Install server
+        install_server "$server_type" "$mc_version"
+        
+        # Install plugins
+        install_plugins
+    fi
+    
+    # Configure server
+    configure_server
     
     # Start server
     start_server
-    
-    # Add shutdown hook
-    trap cleanup EXIT
 }
 
 # Execute main function
-main "$@"
+main
