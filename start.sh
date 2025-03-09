@@ -58,24 +58,56 @@ clear_screen() {
     echo -e "\033c"
     cat << "EOF"
 ${BLINK}${BOLD}${colors[bold_cyan]}
-   ▄████████  ▄███████▄     ▄████████    ▄████████    ▄████████  ▄████████  ▄████████    ▄█     ▄██████▄     ▄█       
-  ███    ███ ██▀     ▄██   ███    ███   ███    ███   ███    ███ ███    ███ ███    ███   ███    ███    ███   ███       
-  ███    █▀        ▄███▀   ███    ███   ███    ███   ███    ███ ███    ███ ███    █▀    ███▌   ███    █▀    ███       
-  ███         ▀█▀▄███▀▄▄   ███    ███  ▄███▄▄▄▄██▀   ███    ███ ███    ███ ███         ▄███▄  ▄███          ███       
-▀███████████ ▄███▀   ▀▀ ▀█████████▀  ▀▀███▀▀▀▀▀   ▀███████████ ███    ███ ███        ▀▀███▀  ▀▀███ ████▄  ███       
-         ███ ████▄     ▄   ███        ▀███████████   ███    ███ ███    ███ ███    █▄    ███    ███    ███   ███       
-   ▄█    ███ ██▀    ▄██▀   ███          ███    ███   ███    ███ ███    ███ ███    ███   ███    ███    ███   ███▌    ▄ 
- ▄████████▀  ██████████   ▄████▀        ███    ███   ███    █▀  ████████▀  ████████▀    █▀     ████████▀    █████▄▄██ 
-                                        ███    ███                                                          ▀         
+  █████╗ ██╗   ██╗██████╗  █████╗ ███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗
+ ██╔══██╗██║   ██║██╔══██╗██╔══██╗████╗  ██║██╔═══██╗██╔══██╗██╔════╝██╔════╝
+ ███████║██║   ██║██████╔╝███████║██╔██╗ ██║██║   ██║██║  ██║█████╗  ███████╗
+ ██╔══██║██║   ██║██╔══██╗██╔══██║██║╚██╗██║██║   ██║██║  ██║██╔══╝  ╚════██║
+ ██║  ██║╚██████╔╝██║  ██║██║  ██║██║ ╚████║╚██████╔╝██████╔╝███████╗███████║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝
 ${NC}
 EOF
     echo
     animate_gradient_text "Welcome to the Ultimate Minecraft Server Management Experience" "ff0000" "00ffff" 0.01
     echo
     echo -e "${colors[bold_cyan]}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${colors[bold_cyan]}║                           CZARACTYL CONTROL PANEL                             ║${NC}"
+    echo -e "${colors[bold_cyan]}║                           AURANODES CONTROL PANEL                             ║${NC}"
     echo -e "${colors[bold_cyan]}╚════════════════════════════════════════════════════════════════════════════════╝${NC}"
     echo
+}
+
+# Function to detect installed server type
+detect_server_type() {
+    if [ -f ".server-type" ]; then
+        SERVER_TYPE=$(cat .server-type)
+        animate_gradient_text "Detected server type: $SERVER_TYPE" "00ffff" "ff00ff"
+        return 0
+    fi
+    
+    if [ -f "server.jar" ]; then
+        # Try to determine server type from jar file
+        if unzip -l server.jar | grep -q "com/destroystokyo/paper"; then
+            SERVER_TYPE="paper-server"
+            echo "$SERVER_TYPE" > .server-type
+        elif unzip -l server.jar | grep -q "net/minecraft/server/MinecraftServer"; then
+            SERVER_TYPE="vanilla-server"
+            echo "$SERVER_TYPE" > .server-type
+        elif unzip -l server.jar | grep -q "org/spongepowered"; then
+            SERVER_TYPE="sponge-server"
+            echo "$SERVER_TYPE" > .server-type
+        elif unzip -l server.jar | grep -q "net/md_5/bungee"; then
+            SERVER_TYPE="bungeecord-server"
+            echo "$SERVER_TYPE" > .server-type
+        else
+            # Default to paper if we can't determine
+            SERVER_TYPE="paper-server"
+            echo "$SERVER_TYPE" > .server-type
+        fi
+        animate_gradient_text "Detected server type: $SERVER_TYPE" "00ffff" "ff00ff"
+        return 0
+    fi
+    
+    # If we get here, we need to select a server type
+    return 1
 }
 
 # Function to select and install server software
@@ -108,30 +140,37 @@ select_and_install_software() {
     case $software in
         "paper")
             curl -o server.jar "https://api.papermc.io/v2/projects/paper/versions/1.20.4/builds/latest/downloads/paper-1.20.4-latest.jar"
+            echo "paper-server" > .server-type
             ;;
         "forge")
             curl -o installer.jar "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.4-latest/forge-1.20.4-latest-installer.jar"
             java -jar installer.jar --installServer
             rm installer.jar
+            echo "forge-server" > .server-type
             ;;
         "fabric")
             curl -o installer.jar "https://maven.fabricmc.net/net/fabricmc/fabric-installer/latest/fabric-installer-latest.jar"
             java -jar installer.jar server -mcversion 1.20.4 -downloadMinecraft
             rm installer.jar
+            echo "fabric-server" > .server-type
             ;;
         "purpur")
             curl -o server.jar "https://api.purpurmc.org/v2/purpur/1.20.4/latest/download"
+            echo "purpur-server" > .server-type
             ;;
         "vanilla")
             curl -o server.jar "https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar"
+            echo "vanilla-server" > .server-type
             ;;
         "spigot")
             curl -o buildtools.jar "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
             java -jar buildtools.jar --rev 1.20.4
             rm buildtools.jar
+            echo "spigot-server" > .server-type
             ;;
         "bungeecord")
-            curl -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+            curl -o server.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+            echo "bungeecord-server" > .server-type
             ;;
     esac
 
@@ -141,30 +180,115 @@ select_and_install_software() {
 
 # Function to install plugins
 install_plugins() {
+    if [ "$SERVER_TYPE" == "bungeecord-server" ] || [ "$SERVER_TYPE" == "forge-server" ] || [ "$SERVER_TYPE" == "fabric-server" ]; then
+        echo -e "${colors[bold_yellow]}Skipping plugin installation for $SERVER_TYPE${NC}"
+        return
+    fi
+    
     animate_gradient_text "Installing plugins..." "00ffff" "ff00ff"
     mkdir -p plugins
-    curl -o plugins/Chunky.jar "https://modrinth.com/plugin/chunky/versions/latest/download"
-    curl -o plugins/Hibernate.jar "https://github.com/SeerMCPE/Hibernate/releases/download/v1.0.0/Hibernate-1.0.0.jar"
+    
+    # Download essential plugins
+    echo -e "${colors[cyan]}Downloading Chunky (world pre-generator)...${NC}"
+    curl -s -L -o plugins/Chunky.jar "https://cdn.modrinth.com/data/fALzjamp/versions/ytBhnGfO/Chunky-Bukkit-1.4.28.jar"
+    
+    echo -e "${colors[cyan]}Downloading EssentialsX (basic server commands)...${NC}"
+    curl -s -L -o plugins/EssentialsX.jar "https://github.com/EssentialsX/Essentials/releases/download/2.20.1/EssentialsX-2.20.1.jar"
+    
+    echo -e "${colors[cyan]}Downloading LuckPerms (permissions management)...${NC}"
+    curl -s -L -o plugins/LuckPerms.jar "https://download.luckperms.net/1515/bukkit/loader/LuckPerms-Bukkit-5.4.102.jar"
+    
     fancy_progress_bar 2
     animate_gradient_text "Plugins installed successfully!" "00ff00" "ffff00"
 }
 
 # Function to configure server properties
 configure_server_properties() {
+    if [ "$SERVER_TYPE" == "bungeecord-server" ]; then
+        echo -e "${colors[bold_yellow]}Configuring BungeeCord config.yml instead of server.properties${NC}"
+        if [ ! -f "config.yml" ]; then
+            cat > config.yml << EOL
+server_connect_timeout: 5000
+listeners:
+- query_port: 25577
+  motd: '&b&lAuraNodes &8| &fPremium Game Hosting'
+  tab_list: GLOBAL_PING
+  query_enabled: false
+  proxy_protocol: false
+  forced_hosts:
+    pvp.md-5.net: pvp
+  ping_passthrough: false
+  priorities:
+  - lobby
+  bind_local_address: true
+  host: 0.0.0.0:25565
+  max_players: 500
+  tab_size: 60
+  force_default_server: false
+remote_ping_cache: -1
+network_compression_threshold: 256
+permissions:
+  default:
+  - bungeecord.command.server
+  - bungeecord.command.list
+  admin:
+  - bungeecord.command.alert
+  - bungeecord.command.end
+  - bungeecord.command.ip
+  - bungeecord.command.reload
+EOL
+        fi
+        return
+    fi
+    
+    if [ "$SERVER_TYPE" == "bedrock-server" ]; then
+        echo -e "${colors[bold_yellow]}Configuring Bedrock server.properties${NC}"
+        if [ ! -f "server.properties" ]; then
+            cat > server.properties << EOL
+server-name=AuraNodes Bedrock Server
+gamemode=survival
+difficulty=easy
+allow-cheats=false
+max-players=20
+online-mode=true
+white-list=false
+server-port=19132
+server-portv6=19133
+view-distance=32
+tick-distance=4
+player-idle-timeout=30
+max-threads=8
+level-name=Bedrock Level
+level-seed=
+default-player-permission-level=member
+texturepack-required=false
+content-log-file-enabled=false
+compression-threshold=1
+server-authoritative-movement=server-auth
+player-movement-score-threshold=20
+player-movement-action-direction-threshold=0.85
+player-movement-distance-threshold=0.3
+player-movement-duration-threshold-in-ms=500
+correct-player-movement=false
+EOL
+        fi
+        return
+    fi
+    
     animate_gradient_text "Configuring server properties..." "ffff00" "00ffff"
-    cat > server.properties << EOL
+    if [ ! -f "server.properties" ]; then
+        cat > server.properties << EOL
 #Minecraft server properties
 #$(date)
 enable-jmx-monitoring=false
 rcon.port=25575
 level-seed=
 gamemode=survival
-enable-command-block=false
-enable-query=false
+enable-command-block=true
 generator-settings={}
 enforce-secure-profile=true
 level-name=world
-motd=A Minecraft Server powered by CZARACTYL
+motd=\u00A7b\u00A7lAuraNodes \u00A78| \u00A7fPremium Game Hosting
 query.port=25565
 pvp=true
 generate-structures=true
@@ -177,14 +301,14 @@ use-native-transport=true
 max-players=20
 online-mode=true
 enable-status=true
-allow-flight=false
+allow-flight=true
 initial-disabled-packs=
 broadcast-rcon-to-ops=true
 view-distance=10
 server-ip=
 resource-pack-prompt=
 allow-nether=true
-server-port=25565
+server-port=${SERVER_PORT:-25565}
 enable-rcon=false
 sync-chunk-writes=true
 op-permission-level=4
@@ -208,20 +332,87 @@ level-type=minecraft\:normal
 text-filtering-config=
 spawn-monsters=true
 enforce-whitelist=false
-spawn-protection=16
+spawn-protection=0
 resource-pack-sha1=
 max-world-size=29999984
 EOL
+    fi
     fancy_progress_bar 2
     animate_gradient_text "Server properties configured successfully!" "00ff00" "ffff00"
 }
 
+# Function to accept EULA
+accept_eula() {
+    if [ ! -f "eula.txt" ] || ! grep -q "eula=true" eula.txt; then
+        animate_gradient_text "Accepting Minecraft EULA..." "ffff00" "00ffff"
+        echo "eula=true" > eula.txt
+        fancy_progress_bar 1
+        animate_gradient_text "EULA accepted!" "00ff00" "ffff00"
+    fi
+}
+
+# Function to start the server
+start_server() {
+    animate_gradient_text "Starting $SERVER_TYPE..." "00ffff" "ff00ff"
+    
+    # Set memory allocation
+    MEMORY=${MEMORY:-1024M}
+    
+    # Optimized Java flags for better performance
+    JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true"
+    
+    case $SERVER_TYPE in
+        "bedrock-server")
+            echo -e "${colors[bold_green]}Starting Bedrock server...${NC}"
+            LD_LIBRARY_PATH=. ./bedrock_server
+            ;;
+        "paper-server"|"purpur-server"|"spigot-server"|"vanilla-server")
+            echo -e "${colors[bold_green]}Starting Java server with optimized settings...${NC}"
+            java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} -jar server.jar nogui
+            ;;
+        "forge-server")
+            echo -e "${colors[bold_green]}Starting Forge server...${NC}"
+            java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} @user_jvm_args.txt @libraries/net/minecraftforge/forge/*/unix_args.txt nogui
+            ;;
+        "fabric-server")
+            echo -e "${colors[bold_green]}Starting Fabric server...${NC}"
+            java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} -jar server.jar nogui
+            ;;
+        "bungeecord-server")
+            echo -e "${colors[bold_green]}Starting BungeeCord server...${NC}"
+            java -Xms${MEMORY} -Xmx${MEMORY} -jar server.jar
+            ;;
+        *)
+            echo -e "${colors[bold_red]}Unknown server type: $SERVER_TYPE${NC}"
+            echo -e "${colors[bold_yellow]}Attempting to start with default Java command...${NC}"
+            java -Xms${MEMORY} -Xmx${MEMORY} -jar server.jar nogui
+            ;;
+    esac
+}
+
 # Main script execution
 clear_screen
-select_and_install_software
+
+# Check if server is already installed
+if detect_server_type; then
+    echo -e "${colors[bold_green]}Server already installed.${NC}"
+else
+    # If not installed, run installation
+    select_and_install_software
+fi
+
+# Install plugins if needed
 install_plugins
+
+# Configure server properties
 configure_server_properties
 
-animate_gradient_text "CZARACTYL setup completed successfully!" "ff00ff" "00ffff"
+# Accept EULA
+accept_eula
+
+# Final message before starting
+animate_gradient_text "AuraNodes setup completed successfully!" "ff00ff" "00ffff"
 echo -e "${colors[bold_green]}Your Minecraft server is now ready to start.${NC}"
-echo -e "${colors[bold_yellow]}Run 'java -jar server.jar' to start your server.${NC}"
+
+# Start the server
+start_server
