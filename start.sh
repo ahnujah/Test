@@ -117,16 +117,15 @@ print_header() {
     echo
 }
 
-# Simple text output function (no animation, no bc dependency)
+# Simple text output function (no animation)
 simple_text() {
     local text="$1"
     local color="${2:-$BOLD_CYAN}"
     echo -e "${color}${text}${RESET}"
 }
 
-# Function to display a fancy progress bar without bc dependency
+# Function to display a simple progress bar
 simple_progress() {
-    local total=$1
     local message="$2"
     local color="${3:-$BOLD_GREEN}"
     local width=50
@@ -135,7 +134,7 @@ simple_progress() {
     for ((i=0; i<width; i++)); do
         echo -ne " "
     done
-    echo -ne "] 0%"
+    echo -ne "] 0%\r"
     
     for ((i=0; i<=width; i++)); do
         local percent=$((i*100/width))
@@ -149,7 +148,7 @@ simple_progress() {
         done
         echo -ne "] ${percent}%"
         
-        sleep 0.05
+        sleep 0.02
     done
     echo
 }
@@ -365,7 +364,7 @@ show_banner() {
 EOF
     echo -e "${RESET}"
     
-    # Use simple text instead of gradient_text to avoid bc dependency
+    # Use simple text instead of gradient_text
     simple_text "✧ ULTIMATE MINECRAFT SERVER MANAGER ✧" "$BOLD_YELLOW"
     print_centered "Version ${VERSION} - ${CODENAME}" "$BOLD_WHITE"
     print_line "═" "$BOLD_CYAN"
@@ -395,30 +394,18 @@ check_dependencies() {
         echo
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Missing dependencies: ${BOLD_WHITE}${missing_deps[*]}${RESET}"
         
-        # Check if we have sudo access
-        if command -v sudo &> /dev/null && sudo -n true 2>/dev/null; then
-            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Attempting to install dependencies with sudo..."
-            
-            start_spinner "Installing dependencies"
-            
-            if command -v apt-get &> /dev/null; then
-                sudo apt-get update -qq
-                sudo apt-get install -y -qq "${missing_deps[@]}"
-            elif command -v yum &> /dev/null; then
-                sudo yum install -y -q "${missing_deps[@]}"
-            else
-                stop_spinner
-                echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Unsupported package manager. Please install dependencies manually."
-                echo -e "${BOLD_YELLOW}${ARROW} ${RESET}The script will continue but may not function correctly."
-            fi
-            
-            stop_spinner
-            echo -e "${BOLD_GREEN}${CHECK_MARK} Dependencies installation attempted.${RESET}"
-        else
-            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}No permission to install dependencies automatically."
-            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Please install the missing dependencies manually or run this script with sudo."
-            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}The script will continue but may not function correctly."
+        # Try to detect package manager
+        if command -v apt-get &> /dev/null; then
+            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
+            echo -e "  ${BOLD_WHITE}sudo apt-get update && sudo apt-get install -y ${missing_deps[*]}${RESET}"
+        elif command -v yum &> /dev/null; then
+            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
+            echo -e "  ${BOLD_WHITE}sudo yum install -y ${missing_deps[*]}${RESET}"
         fi
+        
+        echo -e "${BOLD_YELLOW}${ARROW} ${RESET}The script will continue but some features may not work correctly."
+        echo
+        sleep 2
     else
         echo
         echo -e "${BOLD_GREEN}${CHECK_MARK} All dependencies are already installed!${RESET}"
@@ -534,14 +521,7 @@ get_plugin_version() {
             ;;
         "luckperms")
             # LuckPerms versions based on Minecraft version
-            case "$mc_version" in
-                "1.20"*) echo "5.4.102" ;;
-                "1.19"*) echo "5.4.102" ;;
-                "1.18"*) echo "5.4.102" ;;
-                "1.17"*) echo "5.4.102" ;;
-                "1.16"*) echo "5.4.102" ;;
-                *) echo "5.4.102" ;;
-            esac
+            echo "5.4.102"
             ;;
         "vault")
             # Vault is usually compatible across versions
@@ -580,7 +560,6 @@ get_plugin_version() {
 get_plugin_url() {
     local plugin_name="$1"
     local plugin_version="$2"
-    local mc_version="$3"
     
     case "$plugin_name" in
         "viaversion")
@@ -631,25 +610,52 @@ install_server() {
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Fetching latest Paper build for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
-            # Get latest build for the specified version
-            start_spinner "Fetching build information"
-            build_info=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/$mc_version")
-            latest_build=$(echo $build_info | grep -o '"builds":\[[0-9,]*\]' | grep -o '[0-9]*' | tail -1)
-            stop_spinner
+            # Direct download URL for Paper (fallback if API fails)
+            local fallback_url="https://api.papermc.io/v2/projects/paper/versions/$mc_version/builds/latest/downloads/paper-$mc_version-latest.jar"
             
-            if [ -z "$latest_build" ]; then
-                echo -e "${BOLD_RED}${CROSS_MARK} Failed to get latest build for Paper $mc_version${RESET}"
-                exit 1
+            # Try to get latest build number
+            echo -ne "${BOLD_YELLOW}${ARROW} ${RESET}Fetching build information... "
+            local build_info
+            if ! build_info=$(curl -s --connect-timeout 10 --max-time 15 "https://api.papermc.io/v2/projects/paper/versions/$mc_version"); then
+                echo -e "${BOLD_RED}${CROSS_MARK}${RESET}"
+                echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Failed to fetch build information. Using fallback URL."
+                
+                echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
+                if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                    echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
+                    exit 1
+                fi
+            else
+                echo -e "${BOLD_GREEN}${CHECK_MARK}${RESET}"
+                
+                # Extract latest build number
+                local latest_build
+                if ! latest_build=$(echo "$build_info" | grep -o '"builds":\[[0-9,]*\]' | grep -o '[0-9]*' | tail -1); then
+                    echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Failed to parse build information. Using fallback URL."
+                    
+                    echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
+                    if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                        echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
+                        exit 1
+                    fi
+                else
+                    echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Found build: ${BOLD_CYAN}#${latest_build}${RESET}"
+                    
+                    local download_url="https://api.papermc.io/v2/projects/paper/versions/$mc_version/builds/$latest_build/downloads/paper-$mc_version-$latest_build.jar"
+                    
+                    echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
+                    if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                        echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Trying fallback URL..."
+                        
+                        if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                            echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
+                            exit 1
+                        fi
+                    fi
+                fi
             fi
             
-            echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Found build: ${BOLD_CYAN}#${latest_build}${RESET}"
-            
-            download_url="https://api.papermc.io/v2/projects/paper/versions/$mc_version/builds/$latest_build/downloads/paper-$mc_version-$latest_build.jar"
-            
-            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
-            simple_progress 3 "Downloading Paper $mc_version (Build #$latest_build)"
-            wget -q -O server.jar "$download_url"
-            
+            echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Paper server jar downloaded successfully!"
             echo "paper" > .server-type
             ;;
             
@@ -665,12 +671,19 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Forge installer for Minecraft ${BOLD_CYAN}${mc_version}${RESET} (Forge ${BOLD_CYAN}${forge_version}${RESET})..."
             
             download_url="https://maven.minecraftforge.net/net/minecraftforge/forge/$mc_version-$forge_version/forge-$mc_version-$forge_version-installer.jar"
-            simple_progress 2 "Downloading Forge installer"
-            wget -q -O forge-installer.jar "$download_url"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O forge-installer.jar "$download_url"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Forge installer. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installing Forge server (this may take a while)..."
             start_spinner "Installing Forge server"
-            java -jar forge-installer.jar --installServer > /dev/null 2>&1
+            if ! java -jar forge-installer.jar --installServer > /dev/null 2>&1; then
+                stop_spinner
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to install Forge server. Please check Java installation."
+                rm forge-installer.jar
+                exit 1
+            fi
             stop_spinner
             
             # Clean up installer
@@ -688,7 +701,6 @@ install_server() {
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Forge server installed: ${BOLD_CYAN}${forge_jar}${RESET}"
-            
             echo "forge" > .server-type
             echo "$forge_jar" > .forge-jar
             ;;
@@ -702,12 +714,19 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Fabric installer..."
             
             # Download Fabric installer
-            simple_progress 1 "Downloading Fabric installer"
-            wget -q -O fabric-installer.jar "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.2/fabric-installer-0.11.2.jar"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O fabric-installer.jar "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.2/fabric-installer-0.11.2.jar"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Fabric installer. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installing Fabric server for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             start_spinner "Installing Fabric server"
-            java -jar fabric-installer.jar server -mcversion $mc_version -downloadMinecraft > /dev/null 2>&1
+            if ! java -jar fabric-installer.jar server -mcversion $mc_version -downloadMinecraft > /dev/null 2>&1; then
+                stop_spinner
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to install Fabric server. Please check Java installation."
+                rm fabric-installer.jar
+                exit 1
+            fi
             stop_spinner
             
             # Clean up installer
@@ -732,11 +751,12 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Purpur server for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
             download_url="https://api.purpurmc.org/v2/purpur/$mc_version/latest/download"
-            simple_progress 3 "Downloading Purpur $mc_version"
-            wget -q -O server.jar "$download_url"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Purpur server jar. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Purpur server downloaded successfully!"
-            
             echo "purpur" > .server-type
             ;;
             
@@ -749,12 +769,19 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading BuildTools for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
             # Download BuildTools
-            simple_progress 1 "Downloading BuildTools"
-            wget -q -O BuildTools.jar "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O BuildTools.jar "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download BuildTools. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Building Spigot server (this may take several minutes)..."
             start_spinner "Building Spigot (this will take a while)"
-            java -jar BuildTools.jar --rev $mc_version > /dev/null 2>&1
+            if ! java -jar BuildTools.jar --rev $mc_version > /dev/null 2>&1; then
+                stop_spinner
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to build Spigot server. Please check Java installation."
+                rm BuildTools.jar
+                exit 1
+            fi
             stop_spinner
             
             # Clean up BuildTools
@@ -782,11 +809,12 @@ install_server() {
             
             # This is a simplified approach - in a real script you'd want to fetch the actual latest version
             download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar"
-            simple_progress 2 "Downloading Vanilla $mc_version"
-            wget -q -O server.jar "$download_url"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Vanilla server jar. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Vanilla server downloaded successfully!"
-            
             echo "vanilla" > .server-type
             ;;
             
@@ -794,11 +822,12 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading latest BungeeCord server..."
             
             download_url="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
-            simple_progress 2 "Downloading BungeeCord"
-            wget -q -O server.jar "$download_url"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download BungeeCord server jar. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}BungeeCord server downloaded successfully!"
-            
             echo "bungeecord" > .server-type
             ;;
             
@@ -806,11 +835,12 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading latest Velocity server..."
             
             download_url="https://api.papermc.io/v2/projects/velocity/versions/3.2.0-SNAPSHOT/builds/263/downloads/velocity-3.2.0-SNAPSHOT-263.jar"
-            simple_progress 2 "Downloading Velocity"
-            wget -q -O server.jar "$download_url"
+            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Velocity server jar. Please check your internet connection."
+                exit 1
+            fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Velocity server downloaded successfully!"
-            
             echo "velocity" > .server-type
             ;;
             
@@ -867,17 +897,15 @@ install_plugins() {
     
     for plugin in "${!plugins[@]}"; do
         local plugin_version="${plugin_versions[$plugin]}"
-        local plugin_url=$(get_plugin_url "$plugin" "$plugin_version" "$mc_version")
+        local plugin_url=$(get_plugin_url "$plugin" "$plugin_version")
         
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading ${BOLD_CYAN}${plugins[$plugin]}${RESET} v${BOLD_CYAN}${plugin_version}${RESET} (${current}/${total_plugins})..."
         
         if [ -n "$plugin_url" ]; then
-            wget -q -O "plugins/${plugin}.jar" "$plugin_url"
-            
-            if [ $? -eq 0 ]; then
-                echo -e "  ${BOLD_GREEN}${CHECK_MARK} ${RESET}${plugins[$plugin]} v${plugin_version} installed successfully!"
-            else
+            if ! wget -q --connect-timeout=10 --tries=3 -O "plugins/${plugin}.jar" "$plugin_url"; then
                 echo -e "  ${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download ${plugins[$plugin]}"
+            else
+                echo -e "  ${BOLD_GREEN}${CHECK_MARK} ${RESET}${plugins[$plugin]} v${plugin_version} installed successfully!"
             fi
         else
             echo -e "  ${BOLD_RED}${CROSS_MARK} ${RESET}No download URL found for ${plugins[$plugin]}"
@@ -1537,6 +1565,66 @@ show_server_status() {
     fi
 }
 
+# Function to handle server selection and installation
+select_and_install_server() {
+    # Display server type selection menu
+    server_options=(
+        "${GREEN}Paper${RESET} - High performance fork with plugin support (Recommended)"
+        "${YELLOW}Forge${RESET} - For modded Minecraft"
+        "${BLUE}Fabric${RESET} - Lightweight, modular mod loader"
+        "${PURPLE}Purpur${RESET} - Fork of Paper with additional features"
+        "${WHITE}Vanilla${RESET} - Official Minecraft server"
+        "${RED}Spigot${RESET} - Optimized CraftBukkit fork"
+        "${CYAN}BungeeCord${RESET} - Proxy server for connecting multiple servers"
+        "${BLUE}Velocity${RESET} - Modern, high-performance proxy server"
+    )
+    
+    display_menu "Select Server Software" "$ROCKET" "${server_options[@]}"
+    read -r choice
+    
+    case $choice in
+        1) server_type="paper";;
+        2) server_type="forge";;
+        3) server_type="fabric";;
+        4) server_type="purpur";;
+        5) server_type="vanilla";;
+        6) server_type="spigot";;
+        7) server_type="bungeecord";;
+        8) server_type="velocity";;
+        *) 
+            echo -e "${BOLD_RED}${CROSS_MARK} Invalid choice. Defaulting to Paper.${RESET}"
+            sleep 2
+            server_type="paper"
+            ;;
+    esac
+    
+    # Get Minecraft version with proper input handling
+    mc_version=""
+    while [ -z "$mc_version" ]; do
+        mc_version=$(get_input "Enter Minecraft version (e.g., 1.20.4) or press Enter for latest" "$DEFAULT_MC_VERSION" validate_version)
+    done
+    
+    # Install server
+    install_server "$server_type" "$mc_version"
+    
+    # Install plugins
+    install_plugins
+    
+    # Configure server
+    configure_server
+    
+    # Optimize server
+    optimize_server
+    
+    # Ask to start server
+    if get_yes_no "Start the server now?" "y"; then
+        start_server
+    else
+        echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Server setup completed. Run the script again to start the server."
+        exit 0
+    fi
+}
+
 # Main function
 main() {
     # Set environment variables from Pterodactyl if available
@@ -1546,7 +1634,7 @@ main() {
     # Display banner
     show_banner
     
-    # Check dependencies
+    # Check dependencies (but don't exit if some are missing)
     check_dependencies
     
     # Setup Java
@@ -1569,93 +1657,36 @@ main() {
         )
         
         display_menu "Main Menu" "$CROWN" "${main_options[@]}"
-        read choice
+        read -r choice
         
         case $choice in
             1) # Start server
-                # Configure server (in case of missing files)
                 configure_server
-                
-                # Start server
                 start_server
                 ;;
             2) # Reinstall server
-                # Display server type selection menu
-                server_options=(
-                    "${GREEN}Paper${RESET} - High performance fork with plugin support (Recommended)"
-                    "${YELLOW}Forge${RESET} - For modded Minecraft"
-                    "${BLUE}Fabric${RESET} - Lightweight, modular mod loader"
-                    "${PURPLE}Purpur${RESET} - Fork of Paper with additional features"
-                    "${WHITE}Vanilla${RESET} - Official Minecraft server"
-                    "${RED}Spigot${RESET} - Optimized CraftBukkit fork"
-                    "${CYAN}BungeeCord${RESET} - Proxy server for connecting multiple servers"
-                    "${BLUE}Velocity${RESET} - Modern, high-performance proxy server"
-                )
-                
-                display_menu "Select Server Software" "$ROCKET" "${server_options[@]}"
-                read choice
-                
-                case $choice in
-                    1) server_type="paper";;
-                    2) server_type="forge";;
-                    3) server_type="fabric";;
-                    4) server_type="purpur";;
-                    5) server_type="vanilla";;
-                    6) server_type="spigot";;
-                    7) server_type="bungeecord";;
-                    8) server_type="velocity";;
-                    *) echo -e "${BOLD_RED}${CROSS_MARK} Invalid choice. Exiting.${RESET}"; exit 1;;
-                esac
-                
-                # Get Minecraft version
-                mc_version=$(get_input "Enter Minecraft version (e.g., 1.20.4) or press Enter for latest" "$DEFAULT_MC_VERSION" validate_version)
-                
-                # Install server
-                install_server "$server_type" "$mc_version"
-                
-                # Install plugins
-                install_plugins
-                
-                # Configure server
-                configure_server
-                
-                # Optimize server
-                optimize_server
-                
-                # Start server
-                start_server
+                select_and_install_server
                 ;;
             3) # Manage plugins
-                # Install plugins
                 install_plugins
-                
-                # Start server
                 if get_yes_no "Start the server now?" "y"; then
                     start_server
                 fi
                 ;;
             4) # Server settings
-                # Configure server
                 configure_server
-                
-                # Start server
                 if get_yes_no "Start the server now?" "y"; then
                     start_server
                 fi
                 ;;
             5) # Optimize server
-                # Apply optimizations
                 optimize_server
-                
-                # Start server
                 if get_yes_no "Start the server now?" "y"; then
                     start_server
                 fi
                 ;;
             6) # Create backup
                 create_backup
-                
-                # Start server
                 if get_yes_no "Start the server now?" "y"; then
                     start_server
                 fi
@@ -1664,56 +1695,15 @@ main() {
                 echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Exiting AuraNodes Server Manager. Goodbye!"
                 exit 0
                 ;;
-            *) # Default to starting the server
+            *) # Invalid choice
+                echo -e "${BOLD_RED}${CROSS_MARK} Invalid choice. Starting server with current configuration.${RESET}"
+                sleep 2
                 configure_server
                 start_server
                 ;;
         esac
     else
-        # Display server type selection menu
-        server_options=(
-            "${GREEN}Paper${RESET} - High performance fork with plugin support (Recommended)"
-            "${YELLOW}Forge${RESET} - For modded Minecraft"
-            "${BLUE}Fabric${RESET} - Lightweight, modular mod loader"
-            "${PURPLE}Purpur${RESET} - Fork of Paper with additional features"
-            "${WHITE}Vanilla${RESET} - Official Minecraft server"
-            "${RED}Spigot${RESET} - Optimized CraftBukkit fork"
-            "${CYAN}BungeeCord${RESET} - Proxy server for connecting multiple servers"
-            "${BLUE}Velocity${RESET} - Modern, high-performance proxy server"
-        )
-        
-        display_menu "Select Server Software" "$ROCKET" "${server_options[@]}"
-        read choice
-        
-        case $choice in
-            1) server_type="paper";;
-            2) server_type="forge";;
-            3) server_type="fabric";;
-            4) server_type="purpur";;
-            5) server_type="vanilla";;
-            6) server_type="spigot";;
-            7) server_type="bungeecord";;
-            8) server_type="velocity";;
-            *) echo -e "${BOLD_RED}${CROSS_MARK} Invalid choice. Defaulting to Paper.${RESET}"; server_type="paper";;
-        esac
-        
-        # Get Minecraft version
-        mc_version=$(get_input "Enter Minecraft version (e.g., 1.20.4) or press Enter for latest" "$DEFAULT_MC_VERSION" validate_version)
-        
-        # Install server
-        install_server "$server_type" "$mc_version"
-        
-        # Install plugins
-        install_plugins
-        
-        # Configure server
-        configure_server
-        
-        # Optimize server
-        optimize_server
-        
-        # Start server
-        start_server
+        select_and_install_server
     fi
 }
 
