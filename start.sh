@@ -13,7 +13,7 @@
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 # Version information
-VERSION="3.5.0"
+VERSION="3.5.1"
 CODENAME="Crystal Phoenix"
 
 # Default settings (can be overridden by environment variables)
@@ -73,6 +73,47 @@ MAGIC="✨"
 CROWN="👑"
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
+# ║ ERROR HANDLING                                                             ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# Set up error handling
+set -o pipefail
+
+# Error handling function
+handle_error() {
+    local exit_code=$1
+    local error_line=$2
+    local error_command=$3
+    
+    echo -e "\n${BOLD_RED}ERROR: Command '${error_command}' failed with exit code ${exit_code} at line ${error_line}${RESET}"
+    echo -e "${BOLD_YELLOW}The script encountered an error. Please check the output above for details.${RESET}"
+    
+    # Clean up any temporary files or processes
+    cleanup
+    
+    # Exit with error code
+    exit $exit_code
+}
+
+# Set up trap for errors
+trap 'handle_error $? $LINENO "$BASH_COMMAND"' ERR
+
+# Cleanup function
+cleanup() {
+    # Kill any background processes
+    if [ -f .spinner.pid ]; then
+        kill $(cat .spinner.pid) > /dev/null 2>&1 || true
+        rm .spinner.pid
+    fi
+    
+    # Remove temporary files
+    rm -f .temp_* 2>/dev/null || true
+}
+
+# Set up trap for script exit
+trap cleanup EXIT
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ UTILITY FUNCTIONS                                                          ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
@@ -80,7 +121,7 @@ CROWN="👑"
 print_centered() {
     local text="$1"
     local color="${2:-$RESET}"
-    local width=$(tput cols)
+    local width=$(tput cols 2>/dev/null || echo 80)
     local padding=$(( (width - ${#text}) / 2 ))
     
     printf "%${padding}s" ""
@@ -91,7 +132,7 @@ print_centered() {
 print_line() {
     local character="${1:-═}"
     local color="${2:-$BOLD_CYAN}"
-    local width=$(tput cols)
+    local width=$(tput cols 2>/dev/null || echo 80)
     
     echo -ne "$color"
     for ((i=0; i<width; i++)); do
@@ -117,7 +158,7 @@ print_header() {
     echo
 }
 
-# Simple text output function (no animation)
+# Simple text output function
 simple_text() {
     local text="$1"
     local color="${2:-$BOLD_CYAN}"
@@ -126,6 +167,7 @@ simple_text() {
 
 # Function to display a simple progress bar
 simple_progress() {
+    local duration=$1
     local message="$2"
     local color="${3:-$BOLD_GREEN}"
     local width=50
@@ -148,7 +190,7 @@ simple_progress() {
         done
         echo -ne "] ${percent}%"
         
-        sleep 0.02
+        sleep $(echo "scale=3; $duration/$width" | bc 2>/dev/null || echo 0.02)
     done
     echo
 }
@@ -177,7 +219,7 @@ start_spinner() {
 # Function to stop spinner
 stop_spinner() {
     if [ -f .spinner.pid ]; then
-        kill $(cat .spinner.pid) > /dev/null 2>&1
+        kill $(cat .spinner.pid) > /dev/null 2>&1 || true
         rm .spinner.pid
     fi
     echo -e "\r\033[K"
@@ -187,7 +229,7 @@ stop_spinner() {
 fancy_box() {
     local text="$1"
     local color="${2:-$BOLD_CYAN}"
-    local width=$(tput cols)
+    local width=$(tput cols 2>/dev/null || echo 80)
     local text_width=${#text}
     local padding=$(( (width - text_width - 4) / 2 ))
     
@@ -246,7 +288,7 @@ get_input() {
             echo -ne ": "
         fi
         
-        read result
+        read -r result
         
         # Use default if input is empty
         if [ -z "$result" ] && [ -n "$default" ]; then
@@ -273,7 +315,7 @@ get_yes_no() {
     
     while true; do
         echo -ne "${BOLD_YELLOW}${ARROW} ${RESET}${prompt} (${default^^}/${default:0:1==y?n:y}): "
-        read result
+        read -r result
         
         # Use default if input is empty
         if [ -z "$result" ]; then
@@ -346,6 +388,11 @@ log_message() {
     echo -e "${prefix} ${message}"
 }
 
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ CORE FUNCTIONS                                                             ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
@@ -382,7 +429,7 @@ check_dependencies() {
     
     for dep in "${dependencies[@]}"; do
         echo -ne "  ${BOLD_WHITE}${dep}${RESET}: "
-        if command -v $dep &> /dev/null; then
+        if command_exists "$dep"; then
             echo -e "${BOLD_GREEN}${CHECK_MARK} Installed${RESET}"
         else
             echo -e "${BOLD_RED}${CROSS_MARK} Missing${RESET}"
@@ -395,12 +442,18 @@ check_dependencies() {
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Missing dependencies: ${BOLD_WHITE}${missing_deps[*]}${RESET}"
         
         # Try to detect package manager
-        if command -v apt-get &> /dev/null; then
+        if command_exists apt-get; then
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
             echo -e "  ${BOLD_WHITE}sudo apt-get update && sudo apt-get install -y ${missing_deps[*]}${RESET}"
-        elif command -v yum &> /dev/null; then
+        elif command_exists yum; then
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
             echo -e "  ${BOLD_WHITE}sudo yum install -y ${missing_deps[*]}${RESET}"
+        elif command_exists dnf; then
+            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
+            echo -e "  ${BOLD_WHITE}sudo dnf install -y ${missing_deps[*]}${RESET}"
+        elif command_exists pacman; then
+            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}To install missing dependencies, run:"
+            echo -e "  ${BOLD_WHITE}sudo pacman -Sy ${missing_deps[*]}${RESET}"
         fi
         
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}The script will continue but some features may not work correctly."
@@ -417,10 +470,11 @@ setup_java() {
     print_header "Java Configuration" "$BOLD_CYAN" "$GEAR"
     
     # Get Java version
-    if command -v java &> /dev/null; then
-        local java_version_output=$(java -version 2>&1)
+    if command_exists java; then
+        local java_version_output
+        java_version_output=$(java -version 2>&1)
         JAVA_VERSION=$(echo "$java_version_output" | head -n 1 | cut -d'"' -f2 | cut -d'.' -f1)
-        local java_vendor=$(echo "$java_version_output" | grep -o "OpenJDK\|HotSpot\|Temurin\|GraalVM\|Zulu")
+        local java_vendor=$(echo "$java_version_output" | grep -o "OpenJDK\|HotSpot\|Temurin\|GraalVM\|Zulu" | head -1)
         
         echo -e "${BOLD_GREEN}${CHECK_MARK} Java detected:${RESET}"
         echo -e "  ${BOLD_WHITE}Version:${RESET} Java ${JAVA_VERSION}"
@@ -429,14 +483,15 @@ setup_java() {
         fi
     else
         echo -e "${BOLD_RED}${CROSS_MARK} Java not found. Please install Java 8 or higher.${RESET}"
-        exit 1
+        echo -e "${BOLD_YELLOW}${ARROW} ${RESET}The script will continue, but server startup will fail without Java."
+        JAVA_VERSION=0
     fi
     
     # Set memory allocation
     if [ -n "$MEMORY" ]; then
         echo -e "  ${BOLD_WHITE}Memory:${RESET} Using configured value: ${BOLD_GREEN}${MEMORY}${RESET}"
     else
-        if command -v free &> /dev/null; then
+        if command_exists free; then
             TOTAL_MEMORY=$(free -m | awk '/^Mem:/{print $2}')
             
             if [ "$TOTAL_MEMORY" -gt 8000 ]; then
@@ -511,6 +566,7 @@ get_plugin_version() {
         "essentialsx")
             # EssentialsX versions based on Minecraft version
             case "$mc_version" in
+                "1.21"*) echo "2.20.1" ;;
                 "1.20"*) echo "2.20.1" ;;
                 "1.19"*) echo "2.19.7" ;;
                 "1.18"*) echo "2.19.0" ;;
@@ -530,6 +586,7 @@ get_plugin_version() {
         "worldedit")
             # WorldEdit versions based on Minecraft version
             case "$mc_version" in
+                "1.21"*) echo "7.2.15" ;;
                 "1.20"*) echo "7.2.15" ;;
                 "1.19"*) echo "7.2.15" ;;
                 "1.18"*) echo "7.2.12" ;;
@@ -541,6 +598,7 @@ get_plugin_version() {
         "chunky")
             # Chunky versions based on Minecraft version
             case "$mc_version" in
+                "1.21"*) echo "1.4.28" ;;
                 "1.20"*) echo "1.4.28" ;;
                 "1.19"*) echo "1.3.92" ;;
                 "1.18"*) echo "1.3.38" ;;
@@ -589,6 +647,32 @@ get_plugin_url() {
     esac
 }
 
+# Function to download with retry
+download_with_retry() {
+    local url="$1"
+    local output_file="$2"
+    local max_retries=3
+    local retry_count=0
+    local timeout=30
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if wget --timeout=$timeout --tries=3 --quiet --show-progress --progress=bar:force -O "$output_file" "$url"; then
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Download failed. Retrying ($retry_count/$max_retries)..."
+            sleep 2
+        else
+            echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download after $max_retries attempts."
+            return 1
+        fi
+    done
+    
+    return 1
+}
+
 # Function to download and install server software
 install_server() {
     local server_type=$1
@@ -600,6 +684,10 @@ install_server() {
     
     # Save the Minecraft version for plugin compatibility
     echo "$mc_version" > .mc-version
+    
+    # Create temporary directory for downloads
+    local temp_dir=".aura_temp"
+    mkdir -p "$temp_dir"
     
     case $server_type in
         "paper")
@@ -621,9 +709,10 @@ install_server() {
                 echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Failed to fetch build information. Using fallback URL."
                 
                 echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
-                if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                if ! download_with_retry "$fallback_url" "server.jar"; then
                     echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
-                    exit 1
+                    rm -rf "$temp_dir"
+                    return 1
                 fi
             else
                 echo -e "${BOLD_GREEN}${CHECK_MARK}${RESET}"
@@ -634,9 +723,10 @@ install_server() {
                     echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Failed to parse build information. Using fallback URL."
                     
                     echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
-                    if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                    if ! download_with_retry "$fallback_url" "server.jar"; then
                         echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
-                        exit 1
+                        rm -rf "$temp_dir"
+                        return 1
                     fi
                 else
                     echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Found build: ${BOLD_CYAN}#${latest_build}${RESET}"
@@ -644,12 +734,13 @@ install_server() {
                     local download_url="https://api.papermc.io/v2/projects/paper/versions/$mc_version/builds/$latest_build/downloads/paper-$mc_version-$latest_build.jar"
                     
                     echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Paper server jar..."
-                    if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+                    if ! download_with_retry "$download_url" "server.jar"; then
                         echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Trying fallback URL..."
                         
-                        if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$fallback_url"; then
+                        if ! download_with_retry "$fallback_url" "server.jar"; then
                             echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download server jar. Please check your internet connection."
-                            exit 1
+                            rm -rf "$temp_dir"
+                            return 1
                         fi
                     fi
                 fi
@@ -666,30 +757,40 @@ install_server() {
             fi
             
             # Get latest Forge version for the specified Minecraft version
-            forge_version="49.0.14" # This would ideally be fetched dynamically
+            local forge_version
+            case "$mc_version" in
+                "1.21.4") forge_version="49.0.14" ;;
+                "1.20.4") forge_version="49.0.14" ;;
+                "1.19.4") forge_version="45.1.0" ;;
+                "1.18.2") forge_version="40.2.0" ;;
+                "1.17.1") forge_version="37.1.1" ;;
+                "1.16.5") forge_version="36.2.39" ;;
+                *) forge_version="49.0.14" ;;
+            esac
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Forge installer for Minecraft ${BOLD_CYAN}${mc_version}${RESET} (Forge ${BOLD_CYAN}${forge_version}${RESET})..."
             
-            download_url="https://maven.minecraftforge.net/net/minecraftforge/forge/$mc_version-$forge_version/forge-$mc_version-$forge_version-installer.jar"
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O forge-installer.jar "$download_url"; then
+            local download_url="https://maven.minecraftforge.net/net/minecraftforge/forge/$mc_version-$forge_version/forge-$mc_version-$forge_version-installer.jar"
+            local installer_jar="$temp_dir/forge-installer.jar"
+            
+            if ! download_with_retry "$download_url" "$installer_jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Forge installer. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installing Forge server (this may take a while)..."
             start_spinner "Installing Forge server"
-            if ! java -jar forge-installer.jar --installServer > /dev/null 2>&1; then
+            if ! java -jar "$installer_jar" --installServer > /dev/null 2>&1; then
                 stop_spinner
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to install Forge server. Please check Java installation."
-                rm forge-installer.jar
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             stop_spinner
             
-            # Clean up installer
-            rm forge-installer.jar
-            
             # Find the forge jar
+            local forge_jar
             forge_jar=$(find . -name "forge-$mc_version-$forge_version*.jar" | grep -v installer | head -1)
             if [ -z "$forge_jar" ]; then
                 forge_jar=$(find . -name "forge-*.jar" | grep -v installer | head -1)
@@ -697,7 +798,8 @@ install_server() {
             
             if [ -z "$forge_jar" ]; then
                 echo -e "${BOLD_RED}${CROSS_MARK} Failed to find Forge server jar${RESET}"
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Forge server installed: ${BOLD_CYAN}${forge_jar}${RESET}"
@@ -714,29 +816,32 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Fabric installer..."
             
             # Download Fabric installer
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O fabric-installer.jar "https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.2/fabric-installer-0.11.2.jar"; then
+            local fabric_version="0.15.7"
+            local installer_jar="$temp_dir/fabric-installer.jar"
+            local download_url="https://maven.fabricmc.net/net/fabricmc/fabric-installer/$fabric_version/fabric-installer-$fabric_version.jar"
+            
+            if ! download_with_retry "$download_url" "$installer_jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Fabric installer. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installing Fabric server for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             start_spinner "Installing Fabric server"
-            if ! java -jar fabric-installer.jar server -mcversion $mc_version -downloadMinecraft > /dev/null 2>&1; then
+            if ! java -jar "$installer_jar" server -mcversion "$mc_version" -downloadMinecraft > /dev/null 2>&1; then
                 stop_spinner
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to install Fabric server. Please check Java installation."
-                rm fabric-installer.jar
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             stop_spinner
-            
-            # Clean up installer
-            rm fabric-installer.jar
             
             if [ -f "fabric-server-launch.jar" ]; then
                 echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Fabric server installed successfully!"
             else
                 echo -e "${BOLD_RED}${CROSS_MARK} Failed to install Fabric server${RESET}"
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo "fabric" > .server-type
@@ -750,10 +855,12 @@ install_server() {
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Purpur server for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
-            download_url="https://api.purpurmc.org/v2/purpur/$mc_version/latest/download"
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+            local download_url="https://api.purpurmc.org/v2/purpur/$mc_version/latest/download"
+            
+            if ! download_with_retry "$download_url" "server.jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Purpur server jar. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Purpur server downloaded successfully!"
@@ -769,31 +876,33 @@ install_server() {
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading BuildTools for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
             # Download BuildTools
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O BuildTools.jar "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"; then
+            local buildtools_jar="$temp_dir/BuildTools.jar"
+            local download_url="https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
+            
+            if ! download_with_retry "$download_url" "$buildtools_jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download BuildTools. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Building Spigot server (this may take several minutes)..."
             start_spinner "Building Spigot (this will take a while)"
-            if ! java -jar BuildTools.jar --rev $mc_version > /dev/null 2>&1; then
+            if ! java -jar "$buildtools_jar" --rev "$mc_version" > /dev/null 2>&1; then
                 stop_spinner
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to build Spigot server. Please check Java installation."
-                rm BuildTools.jar
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             stop_spinner
             
-            # Clean up BuildTools
-            rm BuildTools.jar
-            
             # Move the built jar to server.jar
             if [ -f "spigot-$mc_version.jar" ]; then
-                mv "spigot-$mc_version.jar" server.jar
+                mv "spigot-$mc_version.jar" "server.jar"
                 echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Spigot server built successfully!"
             else
                 echo -e "${BOLD_RED}${CROSS_MARK} Failed to build Spigot server jar${RESET}"
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo "spigot" > .server-type
@@ -807,11 +916,22 @@ install_server() {
             
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading Vanilla server for Minecraft ${BOLD_CYAN}${mc_version}${RESET}..."
             
-            # This is a simplified approach - in a real script you'd want to fetch the actual latest version
-            download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar"
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+            # Vanilla download URLs by version
+            local download_url
+            case "$mc_version" in
+                "1.21.4") download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar" ;;
+                "1.20.4") download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar" ;;
+                "1.19.4") download_url="https://piston-data.mojang.com/v1/objects/8f3112a1049751cc472ec13e397eade5336ca7ae/server.jar" ;;
+                "1.18.2") download_url="https://piston-data.mojang.com/v1/objects/c8f83c5655308435b3dcf03c06d9fe8740a77469/server.jar" ;;
+                "1.17.1") download_url="https://piston-data.mojang.com/v1/objects/a16d67e5807f57fc4e550299cf20226194497dc2/server.jar" ;;
+                "1.16.5") download_url="https://piston-data.mojang.com/v1/objects/1b557e7b033b583cd9f66746b7a9ab1ec1673ced/server.jar" ;;
+                *) download_url="https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar" ;;
+            esac
+            
+            if ! download_with_retry "$download_url" "server.jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Vanilla server jar. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Vanilla server downloaded successfully!"
@@ -821,10 +941,12 @@ install_server() {
         "bungeecord")
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading latest BungeeCord server..."
             
-            download_url="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+            local download_url="https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+            
+            if ! download_with_retry "$download_url" "server.jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download BungeeCord server jar. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}BungeeCord server downloaded successfully!"
@@ -834,10 +956,12 @@ install_server() {
         "velocity")
             echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading latest Velocity server..."
             
-            download_url="https://api.papermc.io/v2/projects/velocity/versions/3.2.0-SNAPSHOT/builds/263/downloads/velocity-3.2.0-SNAPSHOT-263.jar"
-            if ! wget -q --show-progress --connect-timeout=10 --tries=3 -O server.jar "$download_url"; then
+            local download_url="https://api.papermc.io/v2/projects/velocity/versions/3.2.0-SNAPSHOT/builds/263/downloads/velocity-3.2.0-SNAPSHOT-263.jar"
+            
+            if ! download_with_retry "$download_url" "server.jar"; then
                 echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download Velocity server jar. Please check your internet connection."
-                exit 1
+                rm -rf "$temp_dir"
+                return 1
             fi
             
             echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Velocity server downloaded successfully!"
@@ -846,24 +970,31 @@ install_server() {
             
         *)
             echo -e "${BOLD_RED}${CROSS_MARK} Unsupported server type: $server_type${RESET}"
-            exit 1
+            rm -rf "$temp_dir"
+            return 1
             ;;
     esac
     
+    # Clean up temporary directory
+    rm -rf "$temp_dir"
+    
     fancy_box "${SPARKLES} Server software installed successfully! ${SPARKLES}" "$BOLD_GREEN"
+    return 0
 }
 
 # Function to install plugins
 install_plugins() {
-    local server_type=$(cat .server-type)
-    local mc_version=$(cat .mc-version)
+    local server_type
+    server_type=$(cat .server-type 2>/dev/null || echo "unknown")
+    local mc_version
+    mc_version=$(cat .mc-version 2>/dev/null || echo "$DEFAULT_MC_VERSION")
     
     print_header "Plugin Installation" "$BOLD_CYAN" "$PLUG"
     
     # Skip plugin installation for certain server types
     if [[ "$server_type" == "vanilla" || "$server_type" == "forge" || "$server_type" == "bungeecord" || "$server_type" == "velocity" ]]; then
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Skipping plugin installation for ${BOLD_CYAN}${server_type^}${RESET} server"
-        return
+        return 0
     fi
     
     echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installing essential plugins for ${BOLD_CYAN}${server_type^}${RESET} server (Minecraft ${BOLD_CYAN}${mc_version}${RESET})..."
@@ -894,33 +1025,43 @@ install_plugins() {
     # Download each plugin with progress indicator
     local total_plugins=${#plugins[@]}
     local current=1
+    local success_count=0
     
     for plugin in "${!plugins[@]}"; do
         local plugin_version="${plugin_versions[$plugin]}"
-        local plugin_url=$(get_plugin_url "$plugin" "$plugin_version")
+        local plugin_url
+        plugin_url=$(get_plugin_url "$plugin" "$plugin_version")
         
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading ${BOLD_CYAN}${plugins[$plugin]}${RESET} v${BOLD_CYAN}${plugin_version}${RESET} (${current}/${total_plugins})..."
         
         if [ -n "$plugin_url" ]; then
-            if ! wget -q --connect-timeout=10 --tries=3 -O "plugins/${plugin}.jar" "$plugin_url"; then
-                echo -e "  ${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download ${plugins[$plugin]}"
-            else
+            if download_with_retry "$plugin_url" "plugins/${plugin}.jar"; then
                 echo -e "  ${BOLD_GREEN}${CHECK_MARK} ${RESET}${plugins[$plugin]} v${plugin_version} installed successfully!"
+                success_count=$((success_count + 1))
+            else
+                echo -e "  ${BOLD_RED}${CROSS_MARK} ${RESET}Failed to download ${plugins[$plugin]}"
             fi
         else
             echo -e "  ${BOLD_RED}${CROSS_MARK} ${RESET}No download URL found for ${plugins[$plugin]}"
         fi
         
-        current=$((current+1))
+        current=$((current + 1))
     done
     
     echo
-    echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Installed ${BOLD_CYAN}${#plugins[@]}${RESET} plugins compatible with Minecraft ${BOLD_CYAN}${mc_version}${RESET}!"
+    if [ $success_count -eq ${#plugins[@]} ]; then
+        echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}All plugins installed successfully!"
+    else
+        echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Installed ${BOLD_CYAN}${success_count}${RESET} out of ${BOLD_CYAN}${#plugins[@]}${RESET} plugins."
+    fi
+    
+    return 0
 }
 
 # Function to configure server properties
 configure_server() {
-    local server_type=$(cat .server-type)
+    local server_type
+    server_type=$(cat .server-type 2>/dev/null || echo "unknown")
     
     print_header "Server Configuration" "$BOLD_CYAN" "$GEAR"
     
@@ -1078,16 +1219,21 @@ EOL
     # Create server icon if it doesn't exist
     if [ ! -f "server-icon.png" ]; then
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Downloading AuraNodes server icon..."
-        wget -q -O server-icon.png "https://i.imgur.com/4KbNMKs.png"
-        echo -e "  ${BOLD_GREEN}${CHECK_MARK} ${RESET}Server icon downloaded!"
+        if download_with_retry "https://i.imgur.com/4KbNMKs.png" "server-icon.png"; then
+            echo -e "  ${BOLD_GREEN}${CHECK_MARK} ${RESET}Server icon downloaded!"
+        else
+            echo -e "  ${BOLD_YELLOW}${ARROW} ${RESET}Failed to download server icon. Skipping..."
+        fi
     fi
     
     fancy_box "${SPARKLES} Server configured successfully! ${SPARKLES}" "$BOLD_GREEN"
+    return 0
 }
 
 # Function to optimize server performance
 optimize_server() {
-    local server_type=$(cat .server-type)
+    local server_type
+    server_type=$(cat .server-type 2>/dev/null || echo "unknown")
     
     print_header "Performance Optimization" "$BOLD_CYAN" "$LIGHTNING"
     
@@ -1096,7 +1242,7 @@ optimize_server() {
     # Skip optimization for proxy servers
     if [[ "$server_type" == "bungeecord" || "$server_type" == "velocity" ]]; then
         echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Skipping optimization for proxy server"
-        return
+        return 0
     fi
     
     # Paper/Purpur specific optimizations
@@ -1174,8 +1320,6 @@ entities:
     villagers-work-immunity-after: 100
     villagers-work-immunity-for: 20
     villagers-active-for-panic: true
-    villagers-work-immunity-after: 100
-    villagers-work-immunity-for: 20
     animals: 16
     monsters: 24
     raiders: 48
@@ -1228,6 +1372,8 @@ EOL
         
         # Create paper-global.yml if it doesn't exist
         if [ ! -f "config/paper-global.yml" ]; then
+            cat > config/paper-global.yml << EOL
+# AuraNodes optimized Paper global settings  ]; then
             cat > config/paper-global.yml << EOL
 # AuraNodes optimized Paper global settings
 proxies:
@@ -1428,11 +1574,13 @@ EOL
     fi
     
     echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Server optimizations applied successfully!"
+    return 0
 }
 
 # Function to start the server
 start_server() {
-    local server_type=$(cat .server-type)
+    local server_type
+    server_type=$(cat .server-type 2>/dev/null || echo "unknown")
     
     print_header "Server Startup" "$BOLD_CYAN" "$ROCKET"
     
@@ -1455,7 +1603,16 @@ start_server() {
             java -Xms512M -Xmx$MEMORY ${JAVA_FLAGS[@]} -jar server.jar nogui
             ;;
         "forge")
-            forge_jar=$(cat .forge-jar)
+            local forge_jar
+            if [ -f ".forge-jar" ]; then
+                forge_jar=$(cat .forge-jar)
+            else
+                forge_jar=$(find . -name "forge-*.jar" | grep -v installer | head -1)
+                if [ -z "$forge_jar" ]; then
+                    forge_jar="server.jar"
+                fi
+            fi
+            
             echo -e "${BOLD_GREEN}${ROCKET} ${RESET}Launching Forge server with command:"
             
             if [ -f "user_jvm_args.txt" ]; then
@@ -1489,9 +1646,11 @@ start_server() {
             ;;
         *)
             echo -e "${BOLD_RED}${CROSS_MARK} Unknown server type: $server_type${RESET}"
-            exit 1
+            return 1
             ;;
     esac
+    
+    return 0
 }
 
 # Function to create a backup
@@ -1506,19 +1665,37 @@ create_backup() {
     
     echo -e "${BOLD_YELLOW}${ARROW} ${RESET}Creating server backup..."
     
+    # Check if tar command exists
+    if ! command_exists tar; then
+        echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}The 'tar' command is not available. Cannot create backup."
+        return 1
+    fi
+    
     # Exclude large and unnecessary files
     start_spinner "Creating backup archive"
-    tar --exclude="./backups" --exclude="./cache" --exclude="./logs" --exclude="./crash-reports" \
+    if ! tar --exclude="./backups" --exclude="./cache" --exclude="./logs" --exclude="./crash-reports" \
         --exclude="./libraries" --exclude="./versions" --exclude="./world/region" \
-        -czf "$backup_file" .
+        -czf "$backup_file" .; then
+        stop_spinner
+        echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to create backup"
+        return 1
+    fi
     stop_spinner
     
     if [ -f "$backup_file" ]; then
-        local size=$(du -h "$backup_file" | cut -f1)
+        local size
+        if command_exists du; then
+            size=$(du -h "$backup_file" | cut -f1)
+        else
+            size=$(ls -lh "$backup_file" | awk '{print $5}')
+        fi
         echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Backup created successfully: ${BOLD_CYAN}${backup_file}${RESET} (${size})"
     else
         echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Failed to create backup"
+        return 1
     fi
+    
+    return 0
 }
 
 # Function to display server status
@@ -1526,43 +1703,59 @@ show_server_status() {
     print_header "Server Status" "$BOLD_CYAN" "$GEAR"
     
     if [ -f ".server-type" ]; then
-        local server_type=$(cat .server-type)
+        local server_type
+        server_type=$(cat .server-type 2>/dev/null || echo "unknown")
         echo -e "${BOLD_WHITE}Server Type:${RESET} ${BOLD_CYAN}${server_type^}${RESET}"
     else
         echo -e "${BOLD_WHITE}Server Type:${RESET} ${BOLD_RED}Not installed${RESET}"
-        return
+        return 1
     fi
     
     if [ -f ".mc-version" ]; then
-        local mc_version=$(cat .mc-version)
+        local mc_version
+        mc_version=$(cat .mc-version 2>/dev/null || echo "unknown")
         echo -e "${BOLD_WHITE}Minecraft Version:${RESET} ${BOLD_CYAN}${mc_version}${RESET}"
     fi
     
     # Check if server is running
-    if pgrep -f "java.*server.jar" > /dev/null; then
+    if command_exists pgrep && pgrep -f "java.*server.jar" > /dev/null; then
         echo -e "${BOLD_WHITE}Status:${RESET} ${BOLD_GREEN}Running${RESET}"
         
         # Get memory usage
-        local pid=$(pgrep -f "java.*server.jar")
-        if [ -n "$pid" ]; then
-            local mem_usage=$(ps -o rss= -p $pid | awk '{print int($1/1024)}')
-            echo -e "${BOLD_WHITE}Memory Usage:${RESET} ${BOLD_CYAN}${mem_usage} MB${RESET}"
+        if command_exists ps; then
+            local pid
+            pid=$(pgrep -f "java.*server.jar")
+            if [ -n "$pid" ]; then
+                local mem_usage
+                mem_usage=$(ps -o rss= -p "$pid" 2>/dev/null | awk '{print int($1/1024)}')
+                if [ -n "$mem_usage" ]; then
+                    echo -e "${BOLD_WHITE}Memory Usage:${RESET} ${BOLD_CYAN}${mem_usage} MB${RESET}"
+                fi
+            fi
         fi
     else
         echo -e "${BOLD_WHITE}Status:${RESET} ${BOLD_RED}Stopped${RESET}"
     fi
     
     # Check world size if exists
-    if [ -d "world" ]; then
-        local world_size=$(du -sh world | cut -f1)
-        echo -e "${BOLD_WHITE}World Size:${RESET} ${BOLD_CYAN}${world_size}${RESET}"
+    if [ -d "world" ] && command_exists du; then
+        local world_size
+        world_size=$(du -sh world 2>/dev/null | cut -f1)
+        if [ -n "$world_size" ]; then
+            echo -e "${BOLD_WHITE}World Size:${RESET} ${BOLD_CYAN}${world_size}${RESET}"
+        fi
     fi
     
     # Check plugin count
-    if [ -d "plugins" ]; then
-        local plugin_count=$(find plugins -name "*.jar" | wc -l)
-        echo -e "${BOLD_WHITE}Plugins:${RESET} ${BOLD_CYAN}${plugin_count}${RESET}"
+    if [ -d "plugins" ] && command_exists find; then
+        local plugin_count
+        plugin_count=$(find plugins -name "*.jar" 2>/dev/null | wc -l)
+        if [ -n "$plugin_count" ]; then
+            echo -e "${BOLD_WHITE}Plugins:${RESET} ${BOLD_CYAN}${plugin_count}${RESET}"
+        fi
     fi
+    
+    return 0
 }
 
 # Function to handle server selection and installation
@@ -1605,7 +1798,10 @@ select_and_install_server() {
     done
     
     # Install server
-    install_server "$server_type" "$mc_version"
+    if ! install_server "$server_type" "$mc_version"; then
+        echo -e "${BOLD_RED}${CROSS_MARK} ${RESET}Server installation failed. Please check the logs above."
+        return 1
+    fi
     
     # Install plugins
     install_plugins
@@ -1621,8 +1817,9 @@ select_and_install_server() {
         start_server
     else
         echo -e "${BOLD_GREEN}${CHECK_MARK} ${RESET}Server setup completed. Run the script again to start the server."
-        exit 0
     fi
+    
+    return 0
 }
 
 # Main function
