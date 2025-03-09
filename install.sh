@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh
+# install.sh for AuraNodes
 
 # ANSI color codes
 RED='\033[0;31m'
@@ -21,17 +21,17 @@ animate_text() {
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
- ██████╗███████╗ █████╗ ██████╗  █████╗  ██████╗████████╗██╗   ██╗██╗     
-██╔════╝╚══███╔╝██╔══██╗██╔══██╗██╔══██╗██╔════╝╚══██╔══╝╚██╗ ██╔╝██║     
-██║       ███╔╝ ███████║██████╔╝███████║██║        ██║    ╚████╔╝ ██║     
-██║      ███╔╝  ██╔══██║██╔══██╗██╔══██║██║        ██║     ╚██╔╝  ██║     
-╚██████╗███████╗██║  ██║██║  ██║██║  ██║╚██████╗   ██║      ██║   ███████╗
- ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝   ╚═╝      ╚═╝   ╚══════╝
+  █████╗ ██╗   ██╗██████╗  █████╗ ███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗
+ ██╔══██╗██║   ██║██╔══██╗██╔══██╗████╗  ██║██╔═══██╗██╔══██╗██╔════╝██╔════╝
+ ███████║██║   ██║██████╔╝███████║██╔██╗ ██║██║   ██║██║  ██║█████╗  ███████╗
+ ██╔══██║██║   ██║██╔══██╗██╔══██║██║╚██╗██║██║   ██║██║  ██║██╔══╝  ╚════██║
+ ██║  ██║╚██████╔╝██║  ██║██║  ██║██║ ╚████║╚██████╔╝██████╔╝███████╗███████║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝
 EOF
 echo -e "${NC}"
-echo -e "${YELLOW}${BOLD}Developed & Maintained By @arpit_singh_boy${NC}"
+echo -e "${YELLOW}${BOLD}Powered by AuraNodes - Premium Game Hosting${NC}"
 
-animate_text "Welcome to Czaractyl Server Installation" "${YELLOW}${BOLD}"
+animate_text "Welcome to AuraNodes Server Installation" "${YELLOW}${BOLD}"
 echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
 
 # Function to download with progress
@@ -102,8 +102,9 @@ if [ ! -f "$JAR_NAME" ]; then
 fi
 
 # Check file size (minimum 1MB)
-if [ $(stat -f%z "$JAR_NAME" 2>/dev/null || stat -c%s "$JAR_NAME" 2>/dev/null) -lt 1000000 ]; then
-    echo -e "${RED}Error: $JAR_NAME is too small, download may have failed${NC}"
+filesize=$(stat -c%s "$JAR_NAME" 2>/dev/null || stat -f%z "$JAR_NAME" 2>/dev/null)
+if [ -z "$filesize" ] || [ "$filesize" -lt 1000000 ]; then
+    echo -e "${RED}Error: $JAR_NAME is too small or couldn't determine size, download may have failed${NC}"
     rm "$JAR_NAME"
     exit 1
 fi
@@ -111,22 +112,59 @@ fi
 # Handle specific installation steps
 case $choice in
     2) # Forge
+        echo -e "${CYAN}Installing Forge server...${NC}"
         java -jar forge-installer.jar --installServer
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Forge installation failed. Please check Java version and try again.${NC}"
+            exit 1
+        fi
         rm forge-installer.jar
-        JAR_NAME=$(ls forge-*-universal.jar)
-        mv "$JAR_NAME" server.jar
+        FORGE_JAR=$(ls forge-*-universal.jar 2>/dev/null)
+        if [ -z "$FORGE_JAR" ]; then
+            FORGE_JAR=$(ls forge-*.jar | grep -v installer 2>/dev/null)
+        fi
+        if [ -z "$FORGE_JAR" ]; then
+            echo -e "${RED}Could not find Forge server jar after installation.${NC}"
+            exit 1
+        fi
+        mv "$FORGE_JAR" server.jar
+        echo "forge-server" > .server-type
         ;;
     3) # Fabric
+        echo -e "${CYAN}Installing Fabric server...${NC}"
         java -jar fabric-installer.jar server -downloadMinecraft
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Fabric installation failed. Please check Java version and try again.${NC}"
+            exit 1
+        fi
         rm fabric-installer.jar
-        JAR_NAME="fabric-server-launch.jar"
-        mv "$JAR_NAME" server.jar
+        if [ -f "fabric-server-launch.jar" ]; then
+            mv fabric-server-launch.jar server.jar
+        else
+            echo -e "${RED}Could not find Fabric server jar after installation.${NC}"
+            exit 1
+        fi
+        echo "fabric-server" > .server-type
         ;;
     6) # Bedrock
+        echo -e "${CYAN}Extracting Bedrock server...${NC}"
         unzip -o bedrock-server.zip
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Failed to extract Bedrock server files.${NC}"
+            exit 1
+        fi
         rm bedrock-server.zip
         chmod +x bedrock_server
-        JAR_NAME="bedrock_server"
+        echo "bedrock-server" > .server-type
+        ;;
+    1) # Paper
+        echo "paper-server" > .server-type
+        ;;
+    4) # Sponge
+        echo "sponge-server" > .server-type
+        ;;
+    5) # BungeeCord
+        echo "bungeecord-server" > .server-type
         ;;
 esac
 
@@ -134,7 +172,7 @@ esac
 if [ "$choice" -ne 5 ] && [ "$choice" -ne 6 ]; then
     cat > server.properties << EOL
 server-port=${SERVER_PORT:-25565}
-motd=\u00A7b\u00A7lCzar-Server \u00A78| \u00A7fMake Yours At dash.czar.host
+motd=\u00A7b\u00A7lAuraNodes \u00A78| \u00A7fPremium Game Hosting
 enable-command-block=true
 spawn-protection=0
 view-distance=10
@@ -152,11 +190,56 @@ fi
 echo "eula=true" > eula.txt
 
 # Download server icon
-curl -o server-icon.png "https://i.postimg.cc/rwZPYnGV/IMG-20250203-221310-1.png"
+curl -s -o server-icon.png "https://i.imgur.com/4KbNMKs.png"
 
-# Create plugins folder and download Chunky plugin
-mkdir -p plugins
-echo -e "${CYAN}Downloading Chunky plugin...${NC}"
-curl -L -o plugins/Chunky-Bukkit-1.4.28.jar "https://cdn.modrinth.com/data/fALzjamp/versions/ytBhnGfO/Chunky-Bukkit-1.4.28.jar"
+# Create plugins folder and download essential plugins
+if [ "$choice" -eq 1 ] || [ "$choice" -eq 4 ]; then
+    mkdir -p plugins
+    echo -e "${CYAN}Downloading essential plugins...${NC}"
+    # Chunky for world pre-generation
+    curl -s -L -o plugins/Chunky-1.4.28.jar "https://cdn.modrinth.com/data/fALzjamp/versions/ytBhnGfO/Chunky-Bukkit-1.4.28.jar"
+    # EssentialsX for basic server commands
+    curl -s -L -o plugins/EssentialsX-2.20.1.jar "https://github.com/EssentialsX/Essentials/releases/download/2.20.1/EssentialsX-2.20.1.jar"
+fi
 
-animate_text "Installation complete! Server is ready to start." "${GREEN}${BOLD}"
+# Create start script
+if [ "$choice" -eq 6 ]; then
+    # Bedrock start script
+    cat > start.sh << 'EOL'
+#!/bin/bash
+./bedrock_server
+EOL
+else
+    # Java start script with optimized flags
+    cat > start.sh << 'EOL'
+#!/bin/bash
+SERVER_TYPE=$(cat .server-type)
+MEMORY=${MEMORY:-1024M}
+
+# Optimized Java flags
+JAVA_FLAGS="-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true"
+
+case $SERVER_TYPE in
+    "paper-server"|"sponge-server"|"bungeecord-server")
+        java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} -jar server.jar nogui
+        ;;
+    "forge-server")
+        java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} -jar server.jar nogui
+        ;;
+    "fabric-server")
+        java -Xms${MEMORY} -Xmx${MEMORY} ${JAVA_FLAGS} -jar server.jar nogui
+        ;;
+    *)
+        echo "Unknown server type. Please check your installation."
+        exit 1
+        ;;
+esac
+EOL
+fi
+
+chmod +x start.sh
+
+animate_text "Installation complete! Your AuraNodes server is ready to start." "${GREEN}${BOLD}"
+echo -e "${CYAN}Run ${YELLOW}./start.sh${CYAN} to start your server.${NC}"
+echo -e "${MAGENTA}${BOLD}==========================================================================${NC}"
+echo -e "${YELLOW}Thank you for choosing AuraNodes for your game server hosting!${NC}"
